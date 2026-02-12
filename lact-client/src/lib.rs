@@ -19,7 +19,7 @@ use schema::{
 };
 use serde::de::DeserializeOwned;
 use std::{
-    future::Future, os::unix::net::UnixStream, path::PathBuf, pin::Pin, rc::Rc, time::Duration,
+    os::unix::net::UnixStream, path::PathBuf, sync::Arc, time::Duration
 };
 use tokio::{
     net::ToSocketAddrs,
@@ -32,7 +32,7 @@ const RECONNECT_INTERVAL_MS: u64 = 500;
 
 #[derive(Clone)]
 pub struct DaemonClient {
-    stream: Rc<Mutex<Box<dyn DaemonConnection>>>,
+    stream: Arc<Mutex<Box<dyn DaemonConnection>>>,
     status_tx: broadcast::Sender<ConnectionStatusMsg>,
     pub embedded: bool,
 }
@@ -44,7 +44,7 @@ impl DaemonClient {
         let stream = UnixConnection::connect(&path).await?;
 
         Ok(Self {
-            stream: Rc::new(Mutex::new(stream)),
+            stream: Arc::new(Mutex::new(stream)),
             embedded: false,
             status_tx: broadcast::Sender::new(STATUS_MSG_CHANNEL_SIZE),
         })
@@ -54,7 +54,7 @@ impl DaemonClient {
         let stream = TcpConnection::connect(addr).await?;
 
         Ok(Self {
-            stream: Rc::new(Mutex::new(stream)),
+            stream: Arc::new(Mutex::new(stream)),
             embedded: false,
             status_tx: broadcast::Sender::new(STATUS_MSG_CHANNEL_SIZE),
         })
@@ -63,7 +63,7 @@ impl DaemonClient {
     pub fn from_stream(stream: UnixStream, embedded: bool) -> anyhow::Result<Self> {
         let connection = UnixConnection::try_from(stream)?;
         Ok(Self {
-            stream: Rc::new(Mutex::new(Box::new(connection))),
+            stream: Arc::new(Mutex::new(Box::new(connection))),
             embedded,
             status_tx: broadcast::Sender::new(STATUS_MSG_CHANNEL_SIZE),
         })
@@ -73,11 +73,10 @@ impl DaemonClient {
         self.status_tx.subscribe()
     }
 
-    fn make_request<'a, T: DeserializeOwned>(
+    async fn make_request<'a, T: DeserializeOwned>(
         &'a self,
         request: Request<'a>,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<T>> + 'a>> {
-        Box::pin(async {
+    ) ->anyhow::Result<T> {
             let mut stream = self.stream.lock().await;
 
             let request_payload = serde_json::to_string(&request)?;
@@ -106,7 +105,7 @@ impl DaemonClient {
 
                                 let _ = self.status_tx.send(ConnectionStatusMsg::Reconnected);
 
-                                return self.make_request(request).await;
+                                  return Err(anyhow::anyhow!("iuyjgfh"));
                             }
                             Err(err) => {
                                 error!(
@@ -119,7 +118,6 @@ impl DaemonClient {
                     }
                 }
             }
-        })
     }
 
     pub async fn list_devices(&self) -> anyhow::Result<Vec<DeviceListEntry>> {

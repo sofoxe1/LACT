@@ -1,6 +1,6 @@
 use super::{DaemonConnection, request};
 use anyhow::Context;
-use futures::future::BoxFuture;
+use async_trait::async_trait;
 use tokio::{
     io::BufReader,
     net::{TcpStream, ToSocketAddrs},
@@ -20,14 +20,13 @@ impl TcpConnection {
         }))
     }
 }
-
+#[async_trait]
 impl DaemonConnection for TcpConnection {
-    fn request<'a>(&'a mut self, payload: &'a str) -> BoxFuture<'a, anyhow::Result<String>> {
-        Box::pin(async { request(&mut self.inner, payload).await })
+    async fn request<'a>(&'a mut self, payload: &'a str) -> anyhow::Result<String> {
+        request(&mut self.inner, payload).await 
     }
 
-    fn new_connection(&self) -> BoxFuture<'_, anyhow::Result<Box<dyn DaemonConnection>>> {
-        Box::pin(async {
+    async fn new_connection(&self) -> anyhow::Result<Box<dyn DaemonConnection>> {
             let peer_addr = self
                 .inner
                 .get_ref()
@@ -35,6 +34,5 @@ impl DaemonConnection for TcpConnection {
                 .context("Could not read peer address")?;
 
             Ok(Self::connect(peer_addr).await? as Box<dyn DaemonConnection>)
-        })
     }
 }

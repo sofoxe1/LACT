@@ -2,14 +2,15 @@ pub mod tcp;
 pub mod unix;
 
 use anyhow::anyhow;
-use futures::future::BoxFuture;
+use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 
-pub trait DaemonConnection {
-    fn request<'a>(&'a mut self, payload: &'a str) -> BoxFuture<'a, anyhow::Result<String>>;
+#[async_trait]
+pub trait DaemonConnection:Send {
+    async fn request<'a>(&'a mut self, payload: &'a str) -> anyhow::Result<String>;
 
     /// Establish a new connection to the same service
-    fn new_connection(&self) -> BoxFuture<'_, anyhow::Result<Box<dyn DaemonConnection>>>;
+    async fn new_connection(&self) -> anyhow::Result<Box<dyn DaemonConnection>>;
 }
 
 async fn request(

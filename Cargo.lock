@@ -1648,6 +1648,7 @@ version = "0.8.5"
 dependencies = [
  "amdgpu-sysfs",
  "anyhow",
+ "async-trait",
  "futures",
  "lact-schema",
  "nix 0.31.1",

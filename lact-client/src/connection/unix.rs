@@ -1,6 +1,6 @@
 use super::{DaemonConnection, request};
 use anyhow::Context;
-use futures::future::BoxFuture;
+use async_trait::async_trait;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::path::Path;
 use tokio::{io::BufReader, net::UnixStream};
@@ -35,24 +35,22 @@ impl TryFrom<StdUnixStream> for UnixConnection {
         Ok(UnixStream::from_std(stream)?.into())
     }
 }
-
+#[async_trait]
 impl DaemonConnection for UnixConnection {
-    fn request<'a>(&'a mut self, payload: &'a str) -> BoxFuture<'a, anyhow::Result<String>> {
-        Box::pin(async { request(&mut self.inner, payload).await })
+    async fn request<'a>(&'a mut self, payload: &'a str) -> anyhow::Result<String> {
+       request(&mut self.inner, payload).await 
     }
 
-    fn new_connection(&self) -> BoxFuture<'_, anyhow::Result<Box<dyn DaemonConnection>>> {
-        Box::pin(async {
-            let peer_addr = self
-                .inner
-                .get_ref()
-                .peer_addr()
-                .context("Could not read peer address")?;
-            let path = peer_addr
-                .as_pathname()
-                .context("Connected socket addr is not a path")?;
+    async fn new_connection(&self) -> anyhow::Result<Box<dyn DaemonConnection>> {
+        let peer_addr = self
+            .inner
+            .get_ref()
+            .peer_addr()
+            .context("Could not read peer address")?;
+        let path = peer_addr
+            .as_pathname()
+            .context("Connected socket addr is not a path")?;
 
-            Ok(Self::connect(path).await? as Box<dyn DaemonConnection>)
-        })
+        Ok(Self::connect(path).await? as Box<dyn DaemonConnection>)
     }
 }

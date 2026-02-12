@@ -14,3 +14,4 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["net", "sync", "time", "io-util"] }
 futures = { workspace = true }
 nix = { workspace = true, features = ["user"] }
+async-trait = "0.1.89"

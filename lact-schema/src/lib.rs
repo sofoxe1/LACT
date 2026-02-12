@@ -687,7 +687,9 @@ pub struct FanOptions<'a> {
     pub spindown_delay_ms: Option<u64>,
     pub change_threshold: Option<u64>,
 }
-
+unsafe impl Send for ProcessInfo {
+    
+}
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ProfilesInfo {
     pub profiles: IndexMap<String, Option<ProfileRule>>,
