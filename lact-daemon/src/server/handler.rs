@@ -3,10 +3,12 @@ use super::{
     profiles::ProfileWatcherCommand,
     system::{self},
 };
+#[cfg(feature = "display-info")]
+use crate::server::display;
 use crate::{
     bindings::intel::IntelDrm,
     config::Config,
-    server::{gpu_controller::init_controller, profiles, system::DAEMON_VERSION},
+    server::{ClientContext, gpu_controller::init_controller, profiles, system::DAEMON_VERSION},
 };
 use crate::{server::gpu_controller::NvidiaLibs, system::run_command};
 use amdgpu_sysfs::gpu_handle::{
@@ -14,8 +16,9 @@ use amdgpu_sysfs::gpu_handle::{
 };
 use anyhow::{Context, anyhow, bail};
 use lact_schema::{
-    ClocksInfo, DeviceInfo, DeviceListEntry, DeviceStats, FanControlMode, FanOptions, PmfwOptions,
-    PowerStates, ProcessList, ProfileRule, ProfileWatcherState, ProfilesInfo,
+    ClocksInfo, DeviceApiInfo, DeviceInfo, DeviceListEntry, DeviceStats, DisplaysInfo,
+    FanControlMode, FanOptions, PmfwOptions, PowerStates, ProcessList, ProfileRule,
+    ProfileWatcherState, ProfilesInfo,
     config::{
         FanControlSettings, FanCurve, GpuConfig, Profile, ProfileHooks, default_fan_static_speed,
     },
@@ -29,13 +32,11 @@ use nix::libc;
 use nvml_wrapper::Nvml;
 use pciid_parser::Database;
 use serde_json::json;
-#[cfg(not(test))]
-use std::collections::HashMap;
 #[cfg(all(not(test), feature = "nvidia"))]
 use std::sync::Arc;
 use std::{
     cell::{Cell, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     env,
     fs::{self, File, Permissions},
     io::{BufWriter, Cursor, Write},
@@ -52,6 +53,7 @@ use tokio::{
     time::sleep,
 };
 use tracing::{debug, error, info, trace, warn};
+use zbus_polkit::policykit1::{self, AuthorityProxy};
 
 const CONTROLLERS_LOAD_RETRY_ATTEMPTS: u8 = 5;
 const CONTROLLERS_LOAD_RETRY_INTERVAL: u64 = 3;
@@ -83,6 +85,13 @@ const SNAPSHOT_EXCLUDED_FILENAME_PREFIXES: &[&str] = &[
 ];
 const CONFIG_RESET_CMDLINE_ARG: &str = "lact-reset";
 
+mod polkit_actions {
+    pub const PROFILE_HOOK: &str = "io.github.ilya_zlobintsev.LACT.profile-hook";
+}
+
+type ProfileHolds = Rc<RefCell<Vec<(u64, Rc<str>, mpsc::Sender<()>)>>>;
+type ProfileHoldSnapshot = Rc<RefCell<Option<(Option<Rc<str>>, bool)>>>;
+
 #[derive(Clone)]
 pub struct Handler {
     pub config: Rc<RwLock<Config>>,
@@ -92,6 +101,10 @@ pub struct Handler {
     profile_watcher_tx: Rc<RefCell<Option<mpsc::Sender<ProfileWatcherCommand>>>>,
     pub profile_watcher_state: Rc<RefCell<Option<ProfileWatcherState>>>,
     profile_watcher_join_handle: Rc<RefCell<Option<JoinHandle<()>>>>,
+    profile_holds: ProfileHolds,
+    profile_hold_snapshot: ProfileHoldSnapshot,
+    next_hold_cookie: Rc<Cell<u64>>,
+    polkit_proxy: Option<AuthorityProxy<'static>>,
 }
 
 impl<'a> Handler {
@@ -140,7 +153,7 @@ impl<'a> Handler {
                     .any(|item| item == CONFIG_RESET_CMDLINE_ARG)
                 {
                     // Save old config in a different file
-                    let datetime = chrono::Local::now().format("%Y%m%d-%H%M%S");
+                    let datetime = jiff::Zoned::now().strftime("%Y%m%d-%H%M%S");
                     let backup_filename = format!("config.reset-{datetime}.yaml");
 
                     if let Err(err) =
@@ -169,6 +182,13 @@ impl<'a> Handler {
             config.save(&Cell::new(Instant::now()))?;
         }
 
+        let polkit_proxy = connect_polkit_proxy()
+            .await
+            .inspect_err(|err| {
+                warn!("could not connect to polkit, admin checks will not be available: {err:#}");
+            })
+            .ok();
+
         let handler = Self {
             gpu_controllers: Rc::new(RwLock::new(controllers)),
             config: Rc::new(RwLock::new(config)),
@@ -177,6 +197,10 @@ impl<'a> Handler {
             profile_watcher_tx: Rc::new(RefCell::new(None)),
             profile_watcher_state: Rc::new(RefCell::new(None)),
             profile_watcher_join_handle: Rc::new(RefCell::new(None)),
+            profile_holds: Rc::new(RefCell::new(Vec::new())),
+            profile_hold_snapshot: Rc::new(RefCell::new(None)),
+            next_hold_cookie: Rc::new(Cell::new(1)),
+            polkit_proxy,
         };
         if let Err(err) = handler.apply_current_config().await {
             error!("could not apply config: {err:#}");
@@ -338,6 +362,16 @@ impl<'a> Handler {
                 () = tokio::time::sleep(Duration::from_secs(apply_timer)) => {
                     info!("no confirmation received, reverting settings");
 
+                    let mut config_guard = handler.config.write().await;
+                    match config_guard.gpus_mut() {
+                        Ok(gpus) => {
+                            gpus.insert(id, previous_config.clone());
+                        }
+                        Err(err) => {
+                            error!("could not revert config: {err}") ;
+                        }
+                    }
+
                     if let Err(err) = controller.apply_config(&previous_config).await {
                         error!("could not revert settings: {err:#}");
                     }
@@ -404,7 +438,23 @@ impl<'a> Handler {
         entries
     }
 
-    pub async fn get_device_info(&'a self, id: &str) -> anyhow::Result<DeviceInfo> {
+    pub async fn get_device_info(
+        &'a self,
+        id: &str,
+        include_api_info: Option<bool>,
+    ) -> anyhow::Result<DeviceInfo> {
+        let controllers = self.gpu_controllers.read().await;
+        let controller = controllers
+            .get(id)
+            .ok_or_else(|| anyhow!("Controller '{id}' not found"))?;
+
+        let unique_vendor = controller_vendor_is_unique(controller, id, &controllers);
+        let include_api_info = include_api_info.unwrap_or(true);
+
+        Ok(controller.get_info(unique_vendor, include_api_info).await)
+    }
+
+    pub async fn get_device_api_info(&'a self, id: &str) -> anyhow::Result<DeviceApiInfo> {
         let controllers = self.gpu_controllers.read().await;
         let controller = controllers
             .get(id)
@@ -412,7 +462,7 @@ impl<'a> Handler {
 
         let unique_vendor = controller_vendor_is_unique(controller, id, &controllers);
 
-        Ok(controller.get_info(unique_vendor).await)
+        Ok(controller.get_api_info(unique_vendor).await)
     }
 
     pub async fn get_gpu_stats(&'a self, id: &str) -> anyhow::Result<DeviceStats> {
@@ -425,6 +475,24 @@ impl<'a> Handler {
         let config = self.config.read().await;
         let gpu_config = config.gpus()?.get(id);
         self.controller_by_id(id).await?.get_clocks_info(gpu_config)
+    }
+
+    #[cfg(feature = "display-info")]
+    pub async fn get_displays_info(&'a self, id: &str) -> anyhow::Result<DisplaysInfo> {
+        let controller = self.controller_by_id(id).await?;
+        let common = controller.controller_info();
+
+        let mut info = display::get_base_displays_info(&common.sysfs_path)?;
+        if let Err(err) = controller.populate_displays_info(&mut info) {
+            warn!("failed to populate displays info: {err:#}");
+        }
+
+        Ok(info)
+    }
+
+    #[cfg(not(feature = "display-info"))]
+    pub async fn get_displays_info(&'a self, _id: &str) -> anyhow::Result<DisplaysInfo> {
+        Err(anyhow!("Daemon is compiled without display info support"))
     }
 
     pub async fn set_fan_control(&'a self, opts: FanOptions<'_>) -> anyhow::Result<u64> {
@@ -561,7 +629,9 @@ impl<'a> Handler {
         }
 
         self.edit_gpu_config(id.to_owned(), |gpu_config| {
-            gpu_config.apply_clocks_command(&command);
+            gpu_config
+                .clocks_configuration
+                .apply_clocks_command(&command);
         })
         .await
         .context("Failed to edit GPU config and set clocks value")
@@ -574,7 +644,9 @@ impl<'a> Handler {
     ) -> anyhow::Result<u64> {
         self.edit_gpu_config(id.to_owned(), |gpu_config| {
             for command in commands {
-                gpu_config.apply_clocks_command(&command);
+                gpu_config
+                    .clocks_configuration
+                    .apply_clocks_command(&command);
             }
         })
         .await
@@ -625,7 +697,7 @@ impl<'a> Handler {
     }
 
     pub async fn generate_snapshot(&self) -> anyhow::Result<String> {
-        let datetime = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let datetime = jiff::Zoned::now().strftime("%Y%m%d-%H%M%S");
         let out_path = format!("/tmp/LACT-v{DAEMON_VERSION}-snapshot-{datetime}.tar.gz");
 
         let out_file = File::create(&out_path)
@@ -750,7 +822,7 @@ impl<'a> Handler {
 
             let data = json!({
                 "pci_info": controller.controller_info().pci_info.clone(),
-                "info": controller.get_info(unique_vendor).await,
+                "info": controller.get_info(unique_vendor, true).await,
                 "stats": controller.get_stats(gpu_config),
                 "clocks_info": controller.get_clocks_info(gpu_config).ok(),
                 "power_profile_modes": controller.get_power_profile_modes().ok(),
@@ -803,6 +875,9 @@ impl<'a> Handler {
         name: Option<Rc<str>>,
         auto_switch: bool,
     ) -> anyhow::Result<()> {
+        if !self.profile_holds.borrow().is_empty() {
+            bail!("Cannot change profile while a hold is active");
+        }
         if auto_switch {
             self.start_profile_watcher().await;
         } else {
@@ -850,7 +925,12 @@ impl<'a> Handler {
         Ok(())
     }
 
-    pub async fn create_profile(&self, name: String, base: ProfileBase) -> anyhow::Result<()> {
+    pub async fn create_profile(
+        &self,
+        name: String,
+        base: ProfileBase,
+        ctx: ClientContext,
+    ) -> anyhow::Result<()> {
         {
             let mut config = self.config.write().await;
             if config.profiles.contains_key(name.as_str()) {
@@ -861,7 +941,18 @@ impl<'a> Handler {
                 ProfileBase::Empty => Profile::default(),
                 ProfileBase::Default => config.default_profile(),
                 ProfileBase::Profile(name) => config.profile(&name)?.clone(),
-                ProfileBase::Provided(profile) => profile,
+                ProfileBase::Provided(profile) => {
+                    if !profile.hooks.is_empty() {
+                        self.check_auth(
+                            polkit_actions::PROFILE_HOOK,
+                            "User was not authorized to set profile rule hooks",
+                            ctx,
+                        )
+                        .await?;
+                    }
+
+                    profile
+                }
             };
             config.profiles.insert(name.into(), profile);
             config.save(&self.config_last_saved)?;
@@ -876,6 +967,14 @@ impl<'a> Handler {
     }
 
     pub async fn delete_profile(&self, name: String) -> anyhow::Result<()> {
+        if self
+            .profile_holds
+            .borrow()
+            .iter()
+            .any(|(_, n, _)| n.as_ref() == name.as_str())
+        {
+            bail!("Cannot delete profile '{name}' while it is held");
+        }
         if self.config.read().await.current_profile.as_deref() == Some(&name) {
             self.set_current_profile(None).await?;
         }
@@ -925,7 +1024,17 @@ impl<'a> Handler {
         name: &str,
         rule: Option<ProfileRule>,
         hooks: ProfileHooks,
+        ctx: ClientContext,
     ) -> anyhow::Result<()> {
+        if !hooks.is_empty() {
+            self.check_auth(
+                polkit_actions::PROFILE_HOOK,
+                "User was not authorized to set profile rule hooks",
+                ctx,
+            )
+            .await?;
+        }
+
         {
             let mut config = self.config.write().await;
             let profile = config
@@ -985,6 +1094,113 @@ impl<'a> Handler {
         }
     }
 
+    pub async fn hold_profile(
+        &self,
+        name: String,
+        disconnect_notify: std::sync::Arc<tokio::sync::Notify>,
+    ) -> anyhow::Result<u64> {
+        {
+            let config = self.config.read().await;
+            config.profile(&name)?;
+        }
+
+        // On the first hold, snapshot the current state and stop the watcher.
+        if self.profile_holds.borrow().is_empty() {
+            let (snapshot_profile, snapshot_auto_switch) = {
+                let config = self.config.read().await;
+                (config.current_profile.clone(), config.auto_switch_profiles)
+            };
+            self.config.write().await.auto_switch_profiles = false;
+            self.stop_profile_watcher().await;
+            *self.profile_hold_snapshot.borrow_mut() =
+                Some((snapshot_profile, snapshot_auto_switch));
+        }
+
+        let name_rc: Rc<str> = Rc::from(name.as_str());
+
+        let cookie = self.next_hold_cookie.get();
+        self.next_hold_cookie.set(cookie + 1);
+
+        let (release_tx, mut release_rx) = mpsc::channel::<()>(1);
+        self.profile_holds
+            .borrow_mut()
+            .push((cookie, name_rc.clone(), release_tx));
+
+        if let Err(err) = self.set_current_profile(Some(name_rc)).await {
+            self.profile_holds
+                .borrow_mut()
+                .retain(|(c, _, _)| *c != cookie);
+            if self.profile_holds.borrow().is_empty() {
+                self.profile_hold_snapshot.borrow_mut().take();
+            }
+            return Err(err);
+        }
+
+        info!("profile hold {cookie} acquired for profile '{name}'");
+
+        let handler = self.clone();
+        tokio::task::spawn_local(async move {
+            tokio::select! {
+                () = disconnect_notify.notified() => {
+                    debug!("connection for profile hold {cookie} dropped, auto-releasing");
+                }
+                _ = release_rx.recv() => {
+                    return;
+                }
+            }
+            if let Err(err) = handler.release_profile(cookie).await {
+                error!("could not auto-release profile hold {cookie}: {err:#}");
+            }
+        });
+
+        Ok(cookie)
+    }
+
+    pub async fn release_profile(&self, cookie: u64) -> anyhow::Result<()> {
+        let (idx, was_top) = {
+            let holds = self.profile_holds.borrow();
+            match holds.iter().rposition(|(c, _, _)| *c == cookie) {
+                Some(idx) => (idx, idx == holds.len() - 1),
+                None => bail!("Unknown profile hold cookie {cookie}"),
+            }
+        };
+
+        let (_, _, release_tx) = self.profile_holds.borrow_mut().remove(idx);
+        let _ = release_tx.send(()).await;
+
+        info!("releasing profile hold {cookie}");
+
+        if self.profile_holds.borrow().is_empty() {
+            // Last hold released, restore the previous state.
+            let (profile, auto_switch) = self
+                .profile_hold_snapshot
+                .borrow_mut()
+                .take()
+                .expect("snapshot missing while holds were active");
+
+            self.set_current_profile(profile).await?;
+
+            if auto_switch {
+                self.start_profile_watcher().await;
+            }
+
+            let mut config = self.config.write().await;
+            config.auto_switch_profiles = auto_switch;
+            config.save(&self.config_last_saved)?;
+        } else if was_top {
+            // Active hold released, activate the hold beneath it.
+            let target = self
+                .profile_holds
+                .borrow()
+                .last()
+                .map(|(_, name, _)| name.clone())
+                .unwrap();
+            self.set_current_profile(Some(target)).await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn reset_config(&self) {
         self.cleanup().await;
 
@@ -1017,6 +1233,37 @@ impl<'a> Handler {
             controller.cleanup().await;
         }
     }
+
+    async fn check_auth(
+        &self,
+        action: &str,
+        error_msg: &str,
+        ctx: ClientContext,
+    ) -> anyhow::Result<()> {
+        let polkit_proxy = self
+            .polkit_proxy
+            .as_ref()
+            .context("Polkit not available, cannot ask for authorization")?;
+
+        let pid = ctx.client_pid.context("No client PID available")?;
+        let subject = policykit1::Subject::new_for_owner(pid, None, None)?;
+        let result = polkit_proxy
+            .check_authorization(
+                &subject,
+                action,
+                &HashMap::new(),
+                policykit1::CheckAuthorizationFlags::AllowUserInteraction.into(),
+                "",
+            )
+            .await
+            .context("Authorization could not be granted")?;
+
+        if result.is_authorized {
+            Ok(())
+        } else {
+            bail!("{error_msg}");
+        }
+    }
 }
 
 async fn apply_config_to_controllers(
@@ -1040,13 +1287,13 @@ async fn apply_config_to_controllers(
 
 #[cfg(all(test, not(miri)))]
 pub(crate) fn read_pci_db() -> Database {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/tests/data/pci.ids");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/snapshots/pci.ids");
     Database::read_from_file(&path).unwrap()
 }
 
 #[cfg(all(test, miri))]
 pub(crate) fn read_pci_db() -> Database {
-    let bytes = include_bytes!("../../src/tests/data/pci.ids");
+    let bytes = include_bytes!("../../../tests/snapshots/pci.ids");
     Database::parse_db(std::io::Cursor::new(bytes)).unwrap()
 }
 
@@ -1316,4 +1563,16 @@ fn controller_vendor_is_unique(
                 .vendor_id
                 == *vendor_id
     })
+}
+
+async fn connect_polkit_proxy() -> anyhow::Result<AuthorityProxy<'static>> {
+    let conn = zbus::Connection::system()
+        .await
+        .context("Could not establish dbus connection")?;
+
+    let proxy = AuthorityProxy::new(&conn)
+        .await
+        .context("Could not connect to polkit")?;
+
+    Ok(proxy)
 }

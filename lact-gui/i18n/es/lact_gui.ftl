@@ -1,8 +1,8 @@
 hardware-info = Información del hardware
-info-page = Información
-oc-page = OC
+info-page = Informe de hardware
+oc-page = Overclocking
 thermals-page = Térmicas
-software-page = Software
+software-page = Info Software
 system-section = Sistema
 lact-daemon = Versión del daemon LACT
 lact-gui = Versión del GUI LACT
@@ -63,9 +63,7 @@ automatic-mode-threshold-tooltip =
 
     Esta opción permite saltarse esa limitación usando sólo la curva personalizada cuando se está sobre una temperatura específica, mientras que se usa el modo que soporte los cero RPM cuando se está debajo de ella.
 amd-oc = Overclocking de AMD
-amd-oc-disabled =
-    El soporte de overclocking de AMD no está activado!
-    Puedes cambiar ajustes básicos, pero no estarán disponibles los ajustes más avanzados de reloj y voltaje.
+amd-oc-disabled = El soporte de overclocking de AMD no está activado! <a href="https://github.com/ilya-zlobintsev/LACT/wiki/Overclocking-(AMD)">Alguna funcionalidad no estará disponible.</a>
 amd-oc-status =
     El overclocking de AMD está: <b>{ $status ->
         [true] Activado
@@ -137,7 +135,7 @@ create = Crear
 cancel = Cancelar
 save = Guardar
 default-profile = Predeterminado
-nvidia-oc-info = Información Aceleración Nvidia
+nvidia-oc-info = Información de Overclocking
 nvidia-oc-description =
     La funcionalidad de overclocking en Nvidia incluye la configuración de compensaciones para las velocidades de reloj de la GPU/VRAM y la limitación del rango potencial de velocidades de reloj mediante la función de "relojes bloqueados".
 
@@ -145,12 +143,10 @@ nvidia-oc-description =
     Por ejemplo, una compensación de VRAM de +1000 MHz puede aumentar la velocidad de VRAM medida solo en 500 MHz.
     Esto es normal y es la forma en que Nvidia gestiona las velocidades de datos GDDR. Ajuste su overclock según corresponda.
 
-    El control directo de voltaje no es compatible, ya que no existe en el controlador de Nvidia para Linux.
-
     Es posible lograr un pseudo-subvoltaje combinando la opción de relojes bloqueados con una compensación positiva de la velocidad de reloj.
     Esto obligará a la GPU a funcionar a un voltaje limitado por los relojes bloqueados, mientras que alcanzará una velocidad de reloj más alta gracias a la compensación.
     Esto puede causar inestabilidad en el sistema si se aumenta demasiado.
-oc-warning = Advertencia: cambiar estos valores puede provocar inestabilidad en el sistema y potencialmente dañar su hardware.
+oc-warning = Cambiar estos valores puede provocar inestabilidad en el sistema y potencialmente dañar su hardware.
 show-all-pstates = Muestra todos los Estados-P
 enable-gpu-locked-clocks = Habilitar Relojes Bloqueados de GPU
 enable-vram-locked-clocks = Habilita Relojes VRAM Bloqueados
@@ -206,9 +202,9 @@ profile-hook-note = Nota: Estos comandos se ejecutan como root por el demonio LA
 pstates = Estado de Energía
 gpu-pstates = Estados de Energía GPU
 vram-pstates = Estados de Energía VRAM
-pstates-manual-needed = Nota: el nivel de rendimiento debe ajustarse en 'manual' para conmutar los estados de energía
+pstates-manual-needed = Nivel de rendimiento debe ajustarse en 'manual' para conmutar los estados de energía
 enable-pstate-config = Habilitar configuración de estado de energía
-show-historical-charts = Mostrar Cartas Históricas
+show-historical-charts = Mostrar Gráficos
 show-process-monitor = Mostrar Monitor de Proceso
 generate-debug-snapshot = Generar Capturas Depuradoras
 gpu-clock-offset = Desplazamiento de Reloj GPU (MHz)
@@ -226,3 +222,54 @@ gpu-pstate-clock = GPU P-State { $pstate } Reloj (MHz)
 mem-pstate-clock = VRAM P-State { $pstate } Reloj (MHz)
 gpu-pstate-clock-voltage = GPU P-State { $pstate } Voltaje (mV)
 mem-pstate-clock-voltage = VRAM P-State { $pstate } Voltaje (mV)
+gibibyte = GiB
+crash-page-title = Aplicación Colgada
+exit = Salir
+bytes = bytes
+kibibyte = KiB
+hw-ip-info = Información de IP en Hardware
+hw-queues = Colas
+theme = Tema
+theme-auto = Automático
+vf-curve-editor = VF Editor de curva
+nvidia-vf-curve-warning =
+    El editor de curva para frecuenta‐voltaje confía en funcionalidad de unidad no documentada.
+    No hay ninguna garantía respecto a su comportamiento, seguridad o disponibilidad.
+    <span weight="heavy" underline="single">Úselo a su propio riesgo</span>.
+vf-curve-enable-editing = Habilita Editar
+voltage = Voltaje
+frequency = Frecuencia
+vf-active-curve = Curva activa
+vf-base-curve = Curva de base
+vf-curve-visible-range = Intervalo visible (%):
+vf-curve-visible-range-to = A
+vf-curve-flatten-right = a
+preferences = Preferencias
+ui = IU
+daemon = Demonio
+about = Acerca de
+confirm = Confirmar
+confirm-settings = Confirmar Ajustes
+settings-confirmation = ¿Desea mantener los ajustes nuevos? (Se revierte en { $seconds_left } segundos)
+error-heading = Error
+daemon-info-heading = Informe del demonio
+embedded-daemon-info =
+    No se pudo conectar la demonio, ejecutando en modo embebido.
+    Asegúrese que el servicio lactd está en ejecución.
+    Se utiliza el modo embebido, no será capaz de cambiar ningún ajuste.
+
+    { $error_info } Para habilitar el demonio, ejecute el comando siguiente, después reinicie LACT:
+version-mismatch = Versión no coincidente
+version-mismatch-description =
+    Versión no coincidente entre IGU y DEmonio ({ $gui_version }-{ $gui_commit } vs { $daemon_version }-{ $daemon_commit })!
+    Si has actualizado LACT, necesita reiniciar el servicio con:
+close = Cerrar
+menu = Menú
+displays-page = Exhibir Info
+display-title = Exhibir { $identifier }
+display-manufacturer = Fabricante
+display-product-code = Código de producto
+display-model = Modelo
+display-physical-size = Medida física
+display-connection = Conexión
+display-manufacture-date = Datos del fabricante

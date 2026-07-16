@@ -15,8 +15,16 @@ pub enum Request<'a> {
     SystemInfo,
     DeviceInfo {
         id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        include_api_info: Option<bool>,
+    },
+    DeviceApiInfo {
+        id: &'a str,
     },
     DeviceStats {
+        id: &'a str,
+    },
+    DisplaysInfo {
         id: &'a str,
     },
     DeviceClocksInfo {
@@ -85,6 +93,12 @@ pub enum Request<'a> {
         name: String,
         new_position: usize,
     },
+    HoldProfile {
+        name: String,
+    },
+    ReleaseProfile {
+        cookie: u64,
+    },
     EvaluateProfileRule {
         rule: ProfileRule,
     },
@@ -137,18 +151,23 @@ impl SetClocksCommand {
 #[serde(rename_all = "snake_case")]
 pub enum ClockspeedType {
     MaxCoreClock,
-    MaxMemoryClock,
-    MaxVoltage,
     MinCoreClock,
-    MinMemoryClock,
-    MinVoltage,
-    VoltageOffset,
     GpuClockOffset(u32),
+
+    MinVoltage,
+    MaxVoltage,
+    VoltageOffset,
+
+    MaxMemoryClock,
+    MinMemoryClock,
     MemClockOffset(u32),
+
     GpuVfCurveClock(u8),
-    MemVfCurveClock(u8),
     GpuVfCurveVoltage(u8),
+
+    MemVfCurveClock(u8),
     MemVfCurveVoltage(u8),
+
     Reset,
 }
 

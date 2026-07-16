@@ -6,7 +6,7 @@ cache-info = Informazioni Cache
 watt = W
 power-usage = Consumo Energetico
 power-profile-mode = Modalità Profilo Di Alimentazione:
-software-page = Software
+software-page = Informazioni Software
 hardware-info = Informazioni Hardware
 system-section = Sistema
 lact-gui = GUI LACT
@@ -54,7 +54,7 @@ performance-level-low = Frequenze Più Basse
 performance-level-high-description = Utilizza sempre le frequenze più elevate per GPU e VRAM.
 performance-level-manual-description = Controllo manuale delle prestazioni.
 overclock-section = Frequenze e Voltaggio
-nvidia-oc-info = Informazioni Overclocking Nvidia
+nvidia-oc-info = Informazioni Overclocking
 driver-version = Versione Driver
 amd-cache-desc =
     { $size } L{ $level } { $types } cache { $shared ->
@@ -73,13 +73,11 @@ mebibyte = MiB
 gpu-clock = Frequenza Core GPU
 kernel-version = Versione Kernel
 driver-name = Nome Driver
-oc-page = OC
+oc-page = Oc
 temperatures = Temperature
 oc-missing-fan-control-warning = Avvertenza: Il supporto all'overclocking è disattivato, la funzionalità di controllo delle ventole non è disponibile.
 min-fan-speed = Velocità Minima Ventole (%)
-amd-oc-disabled =
-    Il supporto all'Overclocking AMD non è abilitato!
-    Puoi comunque cambiare le impostazioni di base, ma il controllo avanzato delle frequenze e del voltaggio non sarà disponibile.
+amd-oc-disabled = L'overclocking AMD non è abilitato! Alcune funzionalità non saranno disponibili.
 compute-units = Unità Di Calcolo
 show-button = Mostra
 unknown-throttling = Sconosciuto
@@ -100,7 +98,7 @@ nvidia-oc-description =
 missing-stat = N/D
 performance-level-auto = Automatico
 performance-level-manual = Manuale
-info-page = Informazioni
+info-page = Informazioni Hardware
 amd-oc = AMD Overclocking
 enable-vram-locked-clocks = Abilita Frequenze Bloccate VRAM
 enable-gpu-locked-clocks = Abilita Frequenze Bloccate GPU
@@ -136,7 +134,7 @@ profile-hook-command = Esegui un comando quando il profilo '{ $cmd }' è:
 profile-hook-activated = Attivato:
 profile-hook-deactivated = Disattivato:
 profile-rule-process-tab = Un processo è in esecuzione
-oc-warning = Avvertenza: la modifica di questi valori può causare instabilità del sistema e potenzialmente danneggiare l'hardware!
+oc-warning = La modifica di questi valori può causare instabilità del sistema e potenzialmente danneggiare l'hardware!
 show-all-pstates = Mostra tutti i P-States
 max-gpu-voltage = Voltaggio Massimo GPU (mV)
 min-gpu-voltage = Voltaggio Minimo GPU (mV)
@@ -148,7 +146,7 @@ mem-pstate-clock-voltage = Voltaggio P-State { $pstate } VRAM (mV)
 pstates = Stati di Alimentazione (P-States)
 vram-pstates = Stati di Alimentazione VRAM
 enable-pstate-config = Abilita configurazione degli stati di alimentazione
-show-historical-charts = Mostra Grafici Storici
+show-historical-charts = Mostra grafici storici
 settings-profile = Impostazioni Profilo
 add-profile = Aggiungi nuovo profilo
 import-profile = Importa profilo da file
@@ -168,7 +166,7 @@ profile-rule-process-name = Nome Processo:
 profile-rule-args-contain = Argomenti Inclusi:
 profile-rule-specific-process = Con un processo specifico:
 amd-oc-updating-done = Configurazione aggiornata, riavviare il sistema per applicare le modifiche.
-pstates-manual-needed = Nota: il livello di prestazioni deve essere impostato su “manuale” per attivare gli stati di alimentazione
+pstates-manual-needed = Il livello di prestazioni deve essere impostato su "manuale" per alternare gli stati di alimentazione
 auto-switch-profiles = Cambia automaticamente
 profile-rules = Regole Profilo
 amd-oc-description =
@@ -229,3 +227,47 @@ edit-graphs = Modifica
 gibibyte = GiB
 crash-page-title = Applicazione crashata
 exit = Esci
+bytes = byte
+kibibyte = KiB
+hw-ip-info = Informazioni IP Hardware
+hw-queues = Code
+theme = tema
+theme-auto = Automatico
+vf-curve-editor = Editor della curva VF
+nvidia-vf-curve-warning =
+    The voltage-frequency curve editor relies on undocumented driver functionality. 
+    There are no guarantees regarding its behaviour, safety or availability.
+    <span weight = "heavy" underline = "single">Use at your own risk</span>.
+vf-curve-enable-editing = Abilita modifiche
+voltage = Tensione
+frequency = Frequenza
+vf-active-curve = Curva attiva
+vf-base-curve = Curva di base
+vf-curve-visible-range = Intervallo visibile (%):
+vf-curve-visible-range-to = to
+vf-curve-flatten-right = Appiattisci la curva verso destra
+ui = UI
+preferences = Preferenze
+daemon = demone
+about = Informazioni
+confirm = Conferma
+confirm-settings = Conferma impostazioni
+settings-confirmation = Vuoi mantenere le nuove impostazioni? (Ripristino tra { $seconds_left } secondi)
+error-heading = Errore
+daemon-info-heading = Info Demone
+embedded-daemon-info =
+    Impossibile connettersi al demone, esecuzione in modalità incorporata.
+    Assicurati che il servizio lactd sia in esecuzione.
+    Utilizzando la modalità incorporata, non sarà possibile modificare alcuna impostazione.
+
+    { $error_info }Per abilitare il demone, esegui il seguente comando, quindi riavvia LACT:
+version-mismatch = Versione non corrispondente
+version-mismatch-description =
+    Discrepanza di versione tra GUI e Demone ({ $gui_version }-{ $gui_commit } vs { $daemon_version }-{ $daemon_commit })!
+    Se hai aggiornato LACT, è necessario riavviare il servizio con:
+close = Chiudi
+menu = Menu
+color-scheme = Schema di Colori
+color-scheme-auto = Sistema
+color-scheme-light = Chiaro
+color-scheme-dark = Scuro

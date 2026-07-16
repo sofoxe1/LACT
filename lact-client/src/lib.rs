@@ -4,7 +4,7 @@ mod macros;
 
 pub use lact_schema as schema;
 use lact_schema::{
-    ProcessList, ProfileRule,
+    DeviceApiInfo, DisplaysInfo, ProcessList, ProfileRule,
     config::{GpuConfig, Profile, ProfileHooks},
 };
 
@@ -124,12 +124,24 @@ impl DaemonClient {
         self.make_request(Request::ListDevices).await
     }
 
+    pub async fn get_device_info(
+        &self,
+        id: &str,
+        include_api_info: Option<bool>,
+    ) -> anyhow::Result<DeviceInfo> {
+        self.make_request(Request::DeviceInfo {
+            id,
+            include_api_info,
+        })
+        .await
+    }
+
     request_plain!(get_system_info, SystemInfo, SystemInfo);
     request_plain!(enable_overdrive, EnableOverdrive, String);
     request_plain!(disable_overdrive, DisableOverdrive, String);
     request_plain!(generate_debug_snapshot, GenerateSnapshot, String);
     request_plain!(reset_config, RestConfig, ());
-    request_with_id!(get_device_info, DeviceInfo, DeviceInfo);
+    request_with_id!(get_device_api_info, DeviceApiInfo, DeviceApiInfo);
     request_with_id!(get_device_stats, DeviceStats, DeviceStats);
     request_with_id!(get_device_clocks_info, DeviceClocksInfo, ClocksInfo);
     request_with_id!(
@@ -141,6 +153,7 @@ impl DaemonClient {
     request_with_id!(reset_pmfw, ResetPmfw, u64);
     request_with_id!(dump_vbios, VbiosDump, Vec<u8>);
     request_with_id!(get_process_list, ProcessList, ProcessList);
+    request_with_id!(get_displays_info, DisplaysInfo, DisplaysInfo);
 
     pub async fn list_profiles(&self, include_state: bool) -> anyhow::Result<ProfilesInfo> {
         self.make_request(Request::ListProfiles { include_state })
@@ -168,6 +181,14 @@ impl DaemonClient {
     pub async fn move_profile(&self, name: String, new_position: usize) -> anyhow::Result<()> {
         self.make_request(Request::MoveProfile { name, new_position })
             .await
+    }
+
+    pub async fn hold_profile(&self, name: String) -> anyhow::Result<u64> {
+        self.make_request(Request::HoldProfile { name }).await
+    }
+
+    pub async fn release_profile(&self, cookie: u64) -> anyhow::Result<()> {
+        self.make_request(Request::ReleaseProfile { cookie }).await
     }
 
     pub async fn evaluate_profile_rule(&self, rule: ProfileRule) -> anyhow::Result<bool> {

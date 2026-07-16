@@ -35,7 +35,7 @@ system.
   - GPU firmware thermal options such as thermal and acoustic target/limit (AMD RDNA3+ only)
 - #### Overclocking
   - GPU/VRAM clocks configuration
-  - GPU undervolting (via voltage offset on AMD, [indirectly](https://github.com/ilya-zlobintsev/LACT/wiki/Frequently-asked-questions#how-to-undervolt-nvidia-gpus) on Nvidia)
+  - GPU undervolting (via voltage offset on AMD, VF curve on Nvidia)
 - #### Settings profiles
   - Automatic profile activation based on running processes or gamemode status
 - #### [OpenTelemetry metrics exporter](./docs/EXPORTER.md)
@@ -55,6 +55,7 @@ The service can also be used standalone with a config file, for example in headl
 - [Power profiles daemon note](#power-profiles-daemon-note)
 - [Recovery from a bad overclock](https://github.com/ilya-zlobintsev/LACT/wiki/Recovering-from-a-bad-overclock)
 - [Metrics exporter](./docs/EXPORTER.md)
+- [Contribute code](./docs/CONTRIBUTING.md)
 - [Contribute translations](#localization)
 - [Support the project](#support-the-project)
 
@@ -81,6 +82,7 @@ The service can also be used standalone with a config file, for example in headl
   in the repos.
 - NixOS: There is a package available in
   [nixpkgs](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=lact).
+- Solus: Available in the offical repository: `eopkg it lact`
 - Flatpak (universal): Available on [Flathub](https://flathub.org/apps/io.github.ilya_zlobintsev.LACT) and in [releases](https://github.com/ilya-zlobintsev/LACT/releases/).
 
   See the [Flatpak documentation](./flatpak/README.md) for additional notes.
@@ -186,14 +188,16 @@ systemd, as it relies on the `org.freedesktop.login2` DBus interface.
 
 Dependencies:
 
-- rust 1.76+
+- rust 1.93+
 - gtk 4.6+
+- libadwaita 1.5+
 - git
 - pkg-config
 - clang
 - make
 - hwdata
 - libdrm
+- libdisplay-info
 
 Optional Dependencies:
 - vulkan-tools
@@ -202,9 +206,9 @@ Optional Dependencies:
 Command to install all dependencies:
 
 - Fedora:
-  `sudo dnf install rust cargo make git clang gtk4-devel libdrm-devel vulkan-tools clinfo`
+  `sudo dnf install rust cargo make git clang gtk4-devel libadwaita-devel libdrm-devel vulkan-tools libdisplay-info-devel clinfo`
 - Arch:
-  `sudo pacman -S --needed base-devel git clang make rust gtk4 hwdata vulkan-tools clinfo`
+  `sudo pacman -S --needed base-devel git clang make rust gtk4 libadwaita hwdata vulkan-tools clinfo libdisplay-info`
 
 Steps:
 
@@ -219,12 +223,6 @@ Headless build with no GUI:
 
 ```
 make build-release-headless
-```
-
-Build GUI with libadwaita support:
-
-```
-make build-release-libadwaita
 ```
 
 # Remote management

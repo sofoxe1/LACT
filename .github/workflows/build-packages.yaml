@@ -10,7 +10,7 @@ jobs:
   build-packages:
     strategy:
       matrix:
-        target-os: [ debian-12, ubuntu-2204, ubuntu-2404, fedora-42, fedora-43, arch, opensuse-tumbleweed ]
+        target-os: [ debian-13, ubuntu-2404, ubuntu-2604, fedora-43, fedora-44, arch, opensuse-tumbleweed ]
         recipe: [ lact, lact-headless ]
         include:
           - target-os: rhel-8
@@ -20,7 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Docker Cache
+        uses: AndreKurait/docker-cache@eb0683e3972ed3066587b7199d3a0e9bd114bd3c #0.6.0
+        with:
+          key: docker-${{ matrix.target-os }}-${{ hashFiles('pkg/images/') }}
 
       - name: Import gpg key
         run: |
@@ -29,13 +34,24 @@ jobs:
         env:
           GPG_KEY: ${{ secrets.GPG_KEY }}
 
+      # TODO: remove this later, potential cause: https://github.com/moby/moby/issues/51665
+      - name: Fix docker 
+        run: |
+          sudo tee /etc/docker/daemon.json <<EOF
+          {
+            "storage-driver": "overlay2"
+          }
+          EOF
+          sudo systemctl restart docker
+          docker info
+
       - name: Install pkger
         run: |
-          curl -L -o /usr/local/bin/pkger https://github.com/ilya-zlobintsev/pkger/releases/download/v0.11.4/pkger
+          curl -L -o /usr/local/bin/pkger https://github.com/ilya-zlobintsev/pkger/releases/download/v0.11.5/pkger
           chmod +x /usr/local/bin/pkger
       
       # A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults.
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Build packages (with signing)
         if: ${{ (contains(matrix.target-os, 'fedora') || contains(matrix.target-os, 'opensuse') || matrix.target-os == 'rhel-9') && env.GPG_KEY_PASSWORD != '' }}
@@ -75,7 +91,7 @@ jobs:
           gpg --armor --export > $PWD/release-artifacts/lact.pubkey
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: ${{ matrix.target-os }}-${{ matrix.recipe }}
           path: release-artifacts/*
@@ -86,14 +102,14 @@ jobs:
       image: bilelmoussaoui/flatpak-github-actions:gnome-47
       options: --privileged
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - uses: flatpak/flatpak-github-actions/flatpak-builder@92ae9851ad316786193b1fd3f40c4b51eb5cb101 # v6
       with:
         bundle: io.github.ilya_zlobintsev.LACT.flatpak
         manifest-path: flatpak/io.github.ilya_zlobintsev.LACT.yaml
         cache-key: flatpak-builder-${{ github.sha }}
     - name: Upload artifacts
-      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
       with:
         name: flatpak
         path: io.github.ilya_zlobintsev.LACT.flatpak
@@ -103,7 +119,7 @@ jobs:
     steps:
       - name: Log into GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -111,15 +127,15 @@ jobs:
 
       - name: Extract Docker image metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6
         with:
           images: ghcr.io/${{ github.repository }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Build and push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           file: pkg/docker/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
@@ -135,16 +151,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: downloaded-artifacts/
           pattern: "!*.dockerbuild"
 
       - name: Create release
-        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           removeArtifacts: true
           allowUpdates: true
@@ -168,16 +184,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: downloaded-artifacts/
           pattern: "!*.dockerbuild"
 
       - name: Create release
-        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           artifacts: "downloaded-artifacts/*/*"
           name: ${{ github.ref_name }}

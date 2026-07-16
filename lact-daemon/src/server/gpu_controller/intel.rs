@@ -6,20 +6,16 @@ use crate::{
         IntelDrm, drm_i915_gem_memory_class_I915_MEMORY_CLASS_DEVICE,
         drm_xe_memory_class_DRM_XE_MEM_REGION_CLASS_VRAM,
     },
-    server::{
-        gpu_controller::common::fdinfo::{self, DrmUtilMap},
-        opencl::get_opencl_info,
-        vulkan::get_vulkan_info,
-    },
+    server::gpu_controller::common::fdinfo::{self, DrmUtilMap},
 };
 use amdgpu_sysfs::{gpu_handle::power_profile_mode::PowerProfileModesTable, hw_mon::Temperature};
 use anyhow::{Context, anyhow, bail};
-use futures::{future::LocalBoxFuture, join};
+use futures::future::LocalBoxFuture;
 use lact_schema::{
-    ClocksInfo, ClocksTable, ClockspeedStats, DeviceInfo, DeviceStats, DeviceType, DrmInfo,
-    DrmMemoryInfo, FanStats, IntelClocksTable, IntelDrmInfo, LinkInfo, PowerState, PowerStates,
-    PowerStats, ProcessList, ProcessUtilizationType, TemperatureEntry, VoltageStats, VramStats,
-    config::GpuConfig,
+    ClocksInfo, ClocksTable, ClockspeedStats, DeviceApiInfo, DeviceInfo, DeviceStats, DeviceType,
+    DrmInfo, DrmMemoryInfo, FanStats, IntelClocksTable, IntelDrmInfo, LinkInfo, PowerState,
+    PowerStates, PowerStats, ProcessList, ProcessUtilizationType, TemperatureEntry, VoltageStats,
+    VramStats, config::GpuConfig,
 };
 use std::{
     borrow::Cow,
@@ -49,6 +45,7 @@ const MAX_POWER_CAP_NAMES: &[&str] = &[
     "power1_crit",
     "power2_crit",
 ];
+const PRIMARY_TEMP_LABELS: &[&str] = &["gpu", "pkg", "vram"];
 
 #[derive(Clone, Copy)]
 enum DriverType {
@@ -382,6 +379,7 @@ impl IntelGpuController {
                 };
                 let entry = TemperatureEntry {
                     value,
+                    primary: PRIMARY_TEMP_LABELS.contains(&key.as_str()),
                     display_only: true,
                 };
                 (key, entry)
@@ -590,16 +588,17 @@ impl GpuController for IntelGpuController {
         self.common.pci_info.device_pci_info.model.clone()
     }
 
-    fn get_info(&self, unique_vendor: bool) -> LocalBoxFuture<'_, DeviceInfo> {
+    fn get_info(
+        &self,
+        unique_vendor: bool,
+        include_api_info: bool,
+    ) -> LocalBoxFuture<'_, DeviceInfo> {
         Box::pin(async move {
-            let (vulkan_result, opencl_instances) = join!(
-                get_vulkan_info(&self.common),
-                get_opencl_info(&self.common, unique_vendor)
-            );
-            let vulkan_instances = vulkan_result.unwrap_or_else(|err| {
-                warn!("could not load vulkan info: {err:#}");
-                vec![]
-            });
+            let api_info = if include_api_info {
+                self.get_api_info(unique_vendor).await
+            } else {
+                DeviceApiInfo::default()
+            };
 
             let vram_info = self.get_vram_info();
 
@@ -615,12 +614,11 @@ impl GpuController for IntelGpuController {
 
             DeviceInfo {
                 pci_info: Some(self.common.pci_info.clone()),
-                vulkan_instances,
+                api_info,
                 driver: self.common.driver.clone(),
                 vbios_version: None,
                 link_info: LinkInfo::default(),
                 drm_info: Some(drm_info),
-                opencl_instances,
                 flags: vec![],
             }
         })
@@ -719,6 +717,9 @@ impl GpuController for IntelGpuController {
                 0 => None,
                 used => Some(used),
             },
+            // TODO
+            gtt_total_usable: None,
+            gtt_used: None,
         };
 
         DeviceStats {
@@ -770,15 +771,13 @@ impl GpuController for IntelGpuController {
                 enabled: true,
                 min_value: None,
                 value,
-                index: None,
+                id: None,
             })
         })
         .collect();
 
         PowerStates { core, vram: vec![] }
     }
-
-    fn reset_pmfw_settings(&self) {}
 
     #[allow(clippy::cast_possible_truncation)]
     fn reset_clocks(&self) -> anyhow::Result<()> {

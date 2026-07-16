@@ -7,15 +7,19 @@ mod nvidia;
 
 use amd::AmdGpuController;
 use intel::IntelGpuController;
+use lact_schema::DeviceApiInfo;
 use lact_schema::DeviceType;
 use lact_schema::ProcessList;
 #[cfg(feature = "nvidia")]
 use nvidia::NvidiaGpuController;
+use tokio::join;
 
 pub const VENDOR_AMD: &str = "1002";
 pub const VENDOR_NVIDIA: &str = "10DE";
 
 use crate::server::handler::{AMD_DRM, INTEL_DRM, NVML};
+use crate::server::opencl::get_opencl_info;
+use crate::server::vulkan::get_vulkan_info;
 use amdgpu_sysfs::gpu_handle::power_profile_mode::PowerProfileModesTable;
 use anyhow::Context;
 use anyhow::anyhow;
@@ -43,7 +47,32 @@ pub trait GpuController {
 
     fn device_type(&self) -> DeviceType;
 
-    fn get_info(&self, unique_vendor: bool) -> LocalBoxFuture<'_, DeviceInfo>;
+    fn get_info(
+        &self,
+        unique_vendor: bool,
+        include_api_info: bool,
+    ) -> LocalBoxFuture<'_, DeviceInfo>;
+
+    fn get_api_info(&self, unique_vendor: bool) -> LocalBoxFuture<'_, DeviceApiInfo> {
+        async move {
+            let common = self.controller_info();
+
+            let (vulkan_result, opencl_instances) = join!(
+                get_vulkan_info(common),
+                get_opencl_info(common, unique_vendor)
+            );
+            let vulkan_instances = vulkan_result.unwrap_or_else(|err| {
+                warn!("could not load vulkan info: {err:#}");
+                vec![]
+            });
+
+            DeviceApiInfo {
+                vulkan_instances,
+                opencl_instances,
+            }
+        }
+        .boxed_local()
+    }
 
     fn friendly_name(&self) -> Option<String>;
 
@@ -55,7 +84,7 @@ pub trait GpuController {
 
     fn get_power_states(&self, gpu_config: Option<&GpuConfig>) -> PowerStates;
 
-    fn reset_pmfw_settings(&self);
+    fn reset_pmfw_settings(&self) {}
 
     fn cleanup(&self) -> LocalBoxFuture<'_, ()> {
         async {}.boxed_local()
@@ -68,6 +97,11 @@ pub trait GpuController {
     fn vbios_dump(&self) -> anyhow::Result<Vec<u8>>;
 
     fn process_list(&self) -> anyhow::Result<ProcessList>;
+
+    #[cfg(feature = "display-info")]
+    fn populate_displays_info(&self, _info: &mut lact_schema::DisplaysInfo) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug)]

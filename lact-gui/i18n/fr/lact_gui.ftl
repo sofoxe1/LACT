@@ -1,7 +1,7 @@
-info-page = Informations
-oc-page = OC
+info-page = Infos matériel
+oc-page = Overclock
 thermals-page = Températures
-software-page = Logiciel
+software-page = Infos logiciel
 hardware-info = Informations sur le matériel
 system-section = Système
 kernel-version = Version du noyau
@@ -48,9 +48,7 @@ curve-page = Courbe
 target-temp = Température cible (°C)
 enable-amd-oc-description = Cela aura pour effet d’activer la fonctionnalité overdrive du pilote amdgpu en créant un fichier à l’emplacement <b>{ $path }</b> et en mettant à jour l’initramfs. Voulez-vous vraiment continuer ?
 zero-rpm-stop-temp = Température d’arrêt à zéro tr/min (°C)
-amd-oc-disabled =
-    La prise en charge de l’overclocking AMD n’est pas activée !
-    Vous pouvez toujours modifier les paramètres de base, mais les réglages avancés de fréquence et de tension ne seront pas disponibles.
+amd-oc-disabled = L’overclocking AMD n’est pas activé ! <a href="https://github.com/ilya-zlobintsev/LACT/wiki/Overclocking-(AMD)">Certaines fonctionnalités ne seront pas disponibles.</a>
 pmfw-reset-warning = Attention : cette opération réinitialise les paramètres des ventilateurs du micrologiciel !
 show-button = Afficher
 cache-data = Données
@@ -74,8 +72,8 @@ unknown-throttling = Inconnue
 performance-level-manual = Manuel
 min-gpu-clock = Fréquence d’horloge GPU minimale (MHz)
 enable-vram-locked-clocks = Activer VRAM Locked Clocks
-oc-warning = Avertissement : la modification de ces valeurs peut entraîner une instabilité du système et endommager votre matériel !
-pstates-manual-needed = Remarque : le niveau de performance doit être réglé sur « manuel » pour basculer entre les états d’alimentation
+oc-warning = La modification de ces valeurs peut entraîner une instabilité du système et endommager votre matériel !
+pstates-manual-needed = Le niveau de performance doit être défini sur « manuel » pour basculer entre les états d’alimentation
 min-gpu-voltage = Tension GPU minimale (mV)
 pstate-list-description = <b>Les valeurs suivantes correspondent à l’ajustement des fréquences d’horloge pour chaque P-State, du plus élevé au plus faible.</b>
 min-vram-clock = Fréquence d’horloge VRAM minimale (MHz)
@@ -89,7 +87,7 @@ performance-level-auto = Automatique
 performance-level-auto-description = Ajuster automatiquement les fréquences d’horloge GPU et VRAM. (Par défaut)
 power-profile-mode = Mode profil d’alimentation :
 overclock-section = Fréquence d’horloge et tension
-nvidia-oc-info = Informations sur Nvidia Overclocking
+nvidia-oc-info = Informations overclock
 show-all-pstates = Afficher tous les P-States
 no-clocks-data = Aucune donnée de fréquence d’horloge disponible
 gpu-clock-offset = Décalage de la fréquence d’horloge GPU (MHz)
@@ -117,7 +115,7 @@ mem-pstate-clock = P-State VRAM { $pstate } Fréquence d’horloge (MHz)
 gpu-pstate-clock-voltage = P-State GPU { $pstate } Tension (mV)
 gpu-pstates = États de puissance GPU
 vram-pstates = États de puissance VRAM
-show-historical-charts = Afficher les graphiques historiques
+show-historical-charts = Afficher les graphiques
 auto-switch-profiles = Basculer automatiquement
 nvidia-oc-description =
     La fonctionnalité d’overclocking NVIDIA comprend le réglage des fréquences d’horloge GPU/VRAM et la limitation de la plage potentielle des fréquences d’horloge à l’aide de la fonctionnalité « locked clocks ».
@@ -125,8 +123,6 @@ nvidia-oc-description =
     Sur de nombreuses cartes, l’ajustement de la fréquence d’horloge VRAM n’affectera la fréquence d’horloge réelle de la mémoire que de la moitié de la valeur d’ajustement.
     Par exemple, un ajustement VRAM de +1000 MHz augmente la fréquence VRAM mesurée de seulement 500 MHz.
     Ce comportement est normal et est cohérent avec la manière dont NVIDIA gère les débits de données GDDR. Ajustez votre overclocking en conséquence.
-
-    Le contrôle direct de la tension n’est pas pris en charge, car il n’existe pas dans le pilote Linux NVIDIA.
 
     Il est possible d’obtenir un pseudo-undervolt en combinant l’option « locked clocks » à un ajustement positif de la fréquence d’horloge.
     Cela forcera le GPU à fonctionner à une tension limitée par le verrouillage d’horloges, tout en atteignant une fréquence d’horloge plus élevée grâce à l’ajustement.
@@ -229,3 +225,43 @@ edit-graphs = Modifier
 gibibyte = Gio
 crash-page-title = L’application a planté
 exit = Quitter
+bytes = octets
+kibibyte = Kio
+hw-ip-info = Informations IP matériel
+hw-queues = Files d'attente
+theme = Thème
+theme-auto = Automatique
+vf-curve-editor = Éditeur de courbes VF
+nvidia-vf-curve-warning =
+    L’éditeur de courbes voltage-fréquence dépend de fonctionnalités non documentées du pilote.
+    Son fonctionnement, sa sécurité et sa disponibilité ne sont pas garantis.
+    <span weight = "heavy" underline = "single">À utiliser à vos risques et périls</span>.
+vf-curve-enable-editing = Activer la modification
+voltage = Voltage
+frequency = Fréquence
+vf-active-curve = Courbe active
+vf-base-curve = Courbe de base
+vf-curve-visible-range = Intervalle visible (%) :
+vf-curve-visible-range-to = à
+vf-curve-flatten-right = Aplatir la courbe sur la droite
+preferences = Préférences
+ui = Interface
+daemon = Démon
+about = À propos
+confirm = Confirmer
+confirm-settings = Confirmer les paramètres
+settings-confirmation = Voulez-vous conserver les nouveaux paramètres ? (Annulation dans { $seconds_left } secondes)
+error-heading = Erreur
+daemon-info-heading = Infos sur le démon
+embedded-daemon-info =
+    Impossible de se connecter au démon, exécution en mode embarqué.
+    Assurez-vous que le service lactd est bien démarré.
+    En étant en mode embarqué, vous ne pourrez pas modifier les paramètres.
+
+    { $error_info }Pour activer le démon, exécutez la commande suivante, puis redémarrez LACT :
+version-mismatch = Versions incompatibles
+version-mismatch-description =
+    La version de l'interface graphique et du démon sont incompatibles ({ $gui_version }-{ $gui_commit } contre { $daemon_version }-{ $daemon_commit }) !
+    Si vous avez mis à jour LACT, vous devez redémarrer le service avec :
+close = Fermer
+menu = Menu

@@ -10,8 +10,7 @@ pub struct StatsData {
 
 impl StatsData {
     pub fn update(&mut self, stats: &DeviceStats, vram_clock_ratio: f64) {
-        let time = chrono::Local::now().naive_local();
-        let timestamp = time.and_utc().timestamp_millis();
+        let timestamp = jiff::Timestamp::now().as_millisecond();
         self.update_with_timestamp(stats, vram_clock_ratio, timestamp);
     }
 
@@ -93,6 +92,17 @@ impl StatsData {
             (
                 StatType::VramUsed,
                 stats.vram.used.map(|val| (val / 1024 / 1024) as f64),
+            ),
+            (
+                StatType::GttSize,
+                stats
+                    .vram
+                    .gtt_total_usable
+                    .map(|val| (val / 1024 / 1024) as f64),
+            ),
+            (
+                StatType::GttUsed,
+                stats.vram.gtt_used.map(|val| (val / 1024 / 1024) as f64),
             ),
         ];
 
@@ -196,8 +206,8 @@ impl StatsData {
         // Limit data to N seconds
         let last_timestamp = self
             .stats
-            .iter()
-            .flat_map(|(_, stats)| stats)
+            .values()
+            .flatten()
             .map(|(date_time, _)| *date_time)
             .next_back()
             .unwrap_or_default();
@@ -227,6 +237,8 @@ pub enum StatType {
     VramClock,
     VramSize,
     VramUsed,
+    GttSize,
+    GttUsed,
     GpuVoltage,
     Clockspeed(String),
     Voltage(String),
@@ -242,6 +254,8 @@ impl StatType {
             VramClock => "Clockspeed (VRAM)".into(),
             VramSize => "VRAM Size".into(),
             VramUsed => "VRAM Used".into(),
+            GttSize => "GTT Size".into(),
+            GttUsed => "GTT Used".into(),
             GpuUsage => "GPU Usage".into(),
             Temperature(name) => format!("Temp ({name})").into(),
             Clockspeed(name) => format!("Clockspeed ({name})").into(),
@@ -259,13 +273,28 @@ impl StatType {
         use StatType::*;
         match self {
             GpuClock | GpuTargetClock | VramClock | Clockspeed(_) => "MHz",
-            VramSize | VramUsed => "MiB",
+            VramSize | VramUsed | GttSize | GttUsed => "MiB",
             GpuVoltage | Voltage(_) => "mV",
             Temperature(_) => "℃",
             FanRpm => "RPM",
             FanPwm => "%",
             GpuUsage => "%",
             PowerCurrent | PowerAverage | PowerCap | Power(_) => "W",
+        }
+    }
+
+    /// How many digits should be formatted
+    pub fn precision(&self) -> usize {
+        use StatType::*;
+        match self {
+            GpuClock | GpuTargetClock | VramClock | Clockspeed(_) => 0,
+            FanPwm => 1,
+            FanRpm => 0,
+            PowerCurrent | PowerAverage | Power(_) => 1,
+            PowerCap => 0,
+            Temperature(_) => 1,
+            GpuUsage | VramSize | VramUsed | GttSize | GttUsed => 0,
+            GpuVoltage | Voltage(_) => 0,
         }
     }
 

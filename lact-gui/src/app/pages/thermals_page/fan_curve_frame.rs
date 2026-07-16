@@ -1,7 +1,9 @@
 use super::{FanSettingRow, PmfwOptions, adj_is_empty};
 use crate::{
     APP_BROKER, I18N,
-    app::{graphs_window::plot::PlotColorScheme, msg::AppMsg, pages::oc_adjustment::OcAdjustment},
+    app::{
+        components::oc_adjustment::OcAdjustment, graphs_window::plot::PlotColorScheme, msg::AppMsg,
+    },
 };
 use gtk::{
     gdk,
@@ -20,7 +22,11 @@ use plotters::{
     chart::ChartBuilder,
     prelude::{Circle, EmptyElement, IntoDrawingArea, Text},
     series::{LineSeries, PointSeries},
-    style::{Color, ShapeStyle, TextStyle, full_palette::LIGHTBLUE, text_anchor::Pos},
+    style::{
+        Color, ShapeStyle, TextStyle,
+        full_palette::{INDIGO, LIGHTBLUE},
+        text_anchor::Pos,
+    },
 };
 use plotters_cairo::CairoBackend;
 use relm4::{
@@ -41,9 +47,14 @@ const DEFAULT_CHANGE_THRESHOLD: u64 = 2;
 const DEFAULT_AUTO_THRESHOLD: u64 = 0;
 const DEFAULT_SPINDOWN_DELAY_MS: u64 = 5000;
 
+const TEMPERATURE_DRAG_MARGIN: f32 = 4.0;
+const PERCENTAGE_DRAG_MARGIN: f32 = 0.04;
+
 #[derive(Clone)]
 pub(super) struct FanCurveFrame {
     pmfw_options: PmfwOptions,
+    /// PMFW fan control on AMD RDNA3+ with fixed length
+    hw_based_fan_curve: Rc<AtomicBool>,
 
     data: Rc<RefCell<Vec<(i32, f32)>>>,
     speed_range: Rc<RefCell<RangeInclusive<f32>>>,
@@ -61,6 +72,11 @@ pub(super) struct FanCurveFrame {
     drag_point: Rc<Cell<Option<usize>>>,
     /// Where the point was last moved to
     drag_coord: Rc<Cell<Option<(f64, f64)>>>,
+
+    /// Index of the point currently being hovered on
+    hover_point: Rc<Cell<Option<usize>>>,
+    /// Where the point was last hovered on
+    hover_coord: Rc<Cell<Option<(f64, f64)>>>,
 }
 
 #[derive(Debug)]
@@ -77,6 +93,7 @@ pub(super) enum FanCurveFrameMsg {
 #[derive(Debug)]
 pub(super) struct CurveSetupMsg {
     pub curve: FanCurveMap,
+    pub hw_based: bool,
     pub current_temperatures: HashMap<String, TemperatureEntry>,
     pub temperature_key: Option<String>,
     pub speed_range: RangeInclusive<f32>,
@@ -144,14 +161,14 @@ impl relm4::Component for FanCurveFrame {
                     set_icon_name: "list-add-symbolic",
                     connect_clicked => FanCurveFrameMsg::AddPoint,
                     #[watch]
-                    set_visible: model.pmfw_options.is_empty(),
+                    set_visible: !model.hw_based_fan_curve.load(Ordering::SeqCst),
                 },
 
                 gtk::Button {
                     set_icon_name: "list-remove-symbolic",
                     connect_clicked => FanCurveFrameMsg::RemovePoint,
                     #[watch]
-                    set_visible: model.pmfw_options.is_empty(),
+                    set_visible: !model.hw_based_fan_curve.load(Ordering::SeqCst),
                 },
 
                 gtk::Button {
@@ -184,7 +201,7 @@ impl relm4::Component for FanCurveFrame {
             #[template]
             FanSettingRow {
                 #[watch]
-                set_visible: model.pmfw_options.is_empty(),
+                set_visible: !model.hw_based_fan_curve.load(Ordering::SeqCst),
 
                 #[template_child]
                 label {
@@ -208,7 +225,7 @@ impl relm4::Component for FanCurveFrame {
             #[template]
             FanSettingRow {
                 #[watch]
-                set_visible: model.pmfw_options.is_empty(),
+                set_visible: !model.hw_based_fan_curve.load(Ordering::SeqCst),
 
                 #[template_child]
                 label {
@@ -315,10 +332,34 @@ impl relm4::Component for FanCurveFrame {
         let temp_keys = gtk::StringList::default();
         let current_temp_key = U32Binding::new(0u32);
 
-        let change_signals = [
-            &spindown_delay_adj,
-            &change_threshold_adj,
-            &auto_threshold_adj,
+        let mut model = Self {
+            pmfw_options,
+            hw_based_fan_curve: Rc::new(AtomicBool::new(false)),
+            is_dragging: Rc::new(AtomicBool::new(false)),
+            speed_range: Rc::new(RefCell::new(DEFAULT_SPEED_RANGE)),
+            temperature_range: Rc::new(RefCell::new(DEFAULT_TEMP_RANGE)),
+            spindown_delay_adj,
+            change_threshold_adj,
+            auto_threshold_adj,
+            temp_keys,
+            current_temp_key,
+            change_signals: Rc::default(),
+            data: Rc::default(),
+            drag_coord: Rc::default(),
+            drag_point: Rc::default(),
+            hover_coord: Rc::default(),
+            hover_point: Rc::default(),
+        };
+
+        let label_size_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);
+        let spin_size_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);
+
+        let widgets = view_output!();
+
+        model.change_signals = [
+            &model.spindown_delay_adj,
+            &model.change_threshold_adj,
+            &model.auto_threshold_adj,
         ]
         .into_iter()
         .map(|adj| {
@@ -328,32 +369,12 @@ impl relm4::Component for FanCurveFrame {
             (adj.clone().upcast(), signal)
         })
         .chain([(
-            current_temp_key.clone().upcast(),
-            current_temp_key.connect_value_notify(|_| {
+            model.current_temp_key.clone().upcast(),
+            model.current_temp_key.connect_value_notify(|_| {
                 APP_BROKER.send(AppMsg::SettingsChanged);
             }),
         )])
         .collect();
-
-        let model = Self {
-            pmfw_options,
-            is_dragging: Rc::new(AtomicBool::new(false)),
-            speed_range: Rc::new(RefCell::new(DEFAULT_SPEED_RANGE)),
-            temperature_range: Rc::new(RefCell::new(DEFAULT_TEMP_RANGE)),
-            spindown_delay_adj,
-            change_threshold_adj,
-            auto_threshold_adj,
-            temp_keys,
-            current_temp_key,
-            change_signals,
-            data: Rc::default(),
-            drag_coord: Rc::default(),
-            drag_point: Rc::default(),
-        };
-
-        let label_size_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);
-        let spin_size_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);
-        let widgets = view_output!();
 
         ComponentParts { model, widgets }
     }
@@ -372,6 +393,8 @@ impl relm4::Component for FanCurveFrame {
                         .collect();
                 *self.speed_range.borrow_mut() = msg.speed_range;
                 *self.temperature_range.borrow_mut() = msg.temperature_range.clone();
+                self.hw_based_fan_curve
+                    .store(msg.hw_based, Ordering::SeqCst);
 
                 for (adj, signal) in self.change_signals.iter() {
                     adj.block_signal(signal);
@@ -431,9 +454,13 @@ impl relm4::Component for FanCurveFrame {
                 self.is_dragging.store(true, Ordering::SeqCst);
             }
             FanCurveFrameMsg::DragUpdate(x, y) => {
+                self.hover_coord.set(Some((x, y)));
+
                 if self.is_dragging.load(Ordering::SeqCst) {
                     self.drag_coord.set(Some((x, y)));
                 }
+
+                widgets.drawing_area.queue_draw();
             }
             FanCurveFrameMsg::DragEnd => {
                 self.drag_coord.take();
@@ -511,7 +538,7 @@ impl FanCurveFrame {
     }
 
     fn temp_keys_available(&self) -> bool {
-        self.pmfw_options.is_empty()
+        !self.hw_based_fan_curve.load(Ordering::SeqCst)
             && self.temp_keys.n_items() > 1
             && (self.auto_threshold_adj.upper() == 0.0) // Disable key selection on nvidia
     }
@@ -526,36 +553,46 @@ impl FanCurveFrame {
     fn draw_chart(&self, ctx: &cairo::Context, width: i32, height: i32, colors: PlotColorScheme) {
         let cairo_backend = CairoBackend::new(ctx, (width as u32, height as u32)).unwrap();
 
-        let drag_coord = self.drag_coord.take();
+        let translate_coords = [self.drag_coord.take(), self.hover_coord.take()];
 
-        let new_value = draw_chart(
+        let translated_coords = draw_chart(
             cairo_backend,
             &self.data.borrow(),
-            drag_coord,
+            translate_coords,
+            self.hover_point.get(),
             colors,
             &self.temperature_range.borrow(),
             &self.speed_range.borrow(),
         );
-        if let Some(mut new_value) = new_value {
+
+        if let Some(mut moved_value) = translated_coords[0] {
             let drag_point_idx = match self.drag_point.get() {
                 Some(idx) => Some(idx),
                 None => {
                     let point = self.data.borrow().iter().position(|(data_x, data_y)| {
-                        (*data_x as f32 - new_value.0).abs() <= 3.0
-                            && (*data_y - new_value.1).abs() <= 0.03
+                        (*data_x as f32 - moved_value.0).abs() <= TEMPERATURE_DRAG_MARGIN
+                            && (*data_y - moved_value.1).abs() <= PERCENTAGE_DRAG_MARGIN
                     });
                     self.drag_point.set(point);
                     point
                 }
             };
             if let Some(idx) = drag_point_idx {
-                normalize_to_range(&mut new_value.0, &self.temperature_range.borrow());
-                normalize_to_range(&mut new_value.1, &self.speed_range.borrow());
-                self.data.borrow_mut()[idx] = (new_value.0 as i32, new_value.1);
+                normalize_to_range(&mut moved_value.0, &self.temperature_range.borrow());
+                normalize_to_range(&mut moved_value.1, &self.speed_range.borrow());
+                self.data.borrow_mut()[idx] = (moved_value.0 as i32, moved_value.1);
 
                 APP_BROKER.send(AppMsg::SettingsChanged);
             }
         }
+
+        let hovered_point = translated_coords[1].and_then(|(x, y)| {
+            self.data.borrow().iter().position(|(data_x, data_y)| {
+                (*data_x as f32 - x).abs() <= TEMPERATURE_DRAG_MARGIN
+                    && (*data_y - y).abs() <= PERCENTAGE_DRAG_MARGIN
+            })
+        });
+        self.hover_point.set(hovered_point);
     }
 }
 
@@ -578,14 +615,15 @@ fn normalize_to_range(value: &mut f32, range: &RangeInclusive<f32>) {
     *value = (*value * 100.0).round() / 100.0;
 }
 
-fn draw_chart(
+fn draw_chart<const I: usize>(
     backend: CairoBackend,
     data: &[(i32, f32)],
-    translate_coord: Option<(f64, f64)>,
+    translate_coords: [Option<(f64, f64)>; I],
+    hovered_point: Option<usize>,
     colors: PlotColorScheme,
     temp_range: &RangeInclusive<f32>,
     speed_range: &RangeInclusive<f32>,
-) -> Option<(f32, f32)> {
+) -> [Option<(f32, f32)>; I] {
     let root = backend.into_drawing_area();
     root.fill(&colors.background).unwrap();
 
@@ -626,10 +664,14 @@ fn draw_chart(
 
     chart
         .draw_series(PointSeries::of_element(
-            data.iter().map(|(x, y)| (*x as f32, *y)),
+            data.iter().map(|(x, y)| (*x as f32, *y)).enumerate(),
             8,
             ShapeStyle::from(&LIGHTBLUE).filled(),
-            &|coord, size, style| {
+            &|(i, coord), size, mut style| {
+                if hovered_point == Some(i) {
+                    style.color = INDIGO.to_rgba();
+                }
+
                 EmptyElement::at(coord)
                     + Circle::new((0, 0), size, style)
                     + Text::new(
@@ -658,8 +700,8 @@ fn draw_chart(
         ))
         .unwrap();
 
-    let mapped_coord = translate_coord
-        .map(|(x, y)| {
+    let mapped_coords = translate_coords.map(|coords| {
+        coords.map(|(x, y)| {
             let coord_spec = chart.as_coord_spec();
             let x_range = coord_spec.get_x_axis_pixel_range();
             let y_range = coord_spec.get_y_axis_pixel_range();
@@ -669,9 +711,13 @@ fn draw_chart(
                 (y as i32).clamp(y_range.start, y_range.end),
             )
         })
-        .and_then(|(x, y)| chart.into_coord_trans()((x, y)));
+    });
+
+    let coord_trans = chart.into_coord_trans();
+
+    let mapped_coords = mapped_coords.map(|coord| coord.and_then(|(x, y)| coord_trans((x, y))));
 
     root.present().unwrap();
 
-    mapped_coord
+    mapped_coords
 }

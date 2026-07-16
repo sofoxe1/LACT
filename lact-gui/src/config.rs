@@ -1,20 +1,22 @@
-use crate::app::graphs_window::stat::StatType;
+use crate::app::{
+    graphs_window::stat::StatType,
+    utils::{color_scheme::AppColorScheme, styles::AppTheme},
+};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_with::skip_serializing_none;
 use std::{collections::HashMap, env, fs, path::PathBuf};
 use tracing::{debug, error};
 
 pub const MIN_STATS_POLL_INTERVAL_MS: i64 = 250;
 pub const MAX_STATS_POLL_INTERVAL_MS: i64 = 5000;
 
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize)]
 pub struct UiConfig {
     #[serde(default = "default_tab")]
     pub selected_tab: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_gpu: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plots_time_period: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plots_per_row: Option<u64>,
     #[serde(
         default = "default_stats_poll_interval",
@@ -23,6 +25,11 @@ pub struct UiConfig {
     pub stats_poll_interval_ms: i64,
     #[serde(default)]
     pub gpus: HashMap<String, UiGpuConfig>,
+    #[serde(default)]
+    pub theme: AppTheme,
+    #[serde(default)]
+    pub color_scheme: AppColorScheme,
+    pub window_size: Option<WindowSize>,
 }
 
 impl Default for UiConfig {
@@ -34,8 +41,17 @@ impl Default for UiConfig {
             plots_per_row: None,
             stats_poll_interval_ms: default_stats_poll_interval(),
             gpus: HashMap::new(),
+            theme: AppTheme::Automatic,
+            color_scheme: AppColorScheme::default(),
+            window_size: None,
         }
     }
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct WindowSize {
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(Default, Serialize, Deserialize)]

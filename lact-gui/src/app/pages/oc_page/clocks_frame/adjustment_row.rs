@@ -1,18 +1,17 @@
 use crate::{
     APP_BROKER, I18N,
-    app::{msg::AppMsg, pages::oc_adjustment::OcAdjustment},
+    app::{
+        components::oc_adjustment::OcAdjustment, msg::AppMsg,
+        utils::ext::make_event_controller_no_scroll,
+    },
 };
 use gtk::{
-    glib::{
-        SignalHandlerId,
-        object::{Cast, ObjectExt},
-        types::StaticType,
-    },
-    prelude::{AdjustmentExt, EventControllerExt, OrientableExt, RangeExt, ScaleExt, WidgetExt},
+    glib::{SignalHandlerId, object::ObjectExt},
+    prelude::{AdjustmentExt, EditableExt, OrientableExt, RangeExt, ScaleExt, WidgetExt},
 };
 use i18n_embed_fl::fl;
 use lact_schema::request::ClockspeedType;
-use relm4::{RelmWidgetExt, prelude::FactoryComponent};
+use relm4::prelude::FactoryComponent;
 
 pub struct ClockAdjustmentRow {
     clock_type: ClockspeedType,
@@ -20,7 +19,6 @@ pub struct ClockAdjustmentRow {
     value_ratio: f64,
     change_signal: SignalHandlerId,
     adjustment: OcAdjustment,
-    show_separator: bool,
     pub(super) is_secondary: bool,
 }
 
@@ -30,7 +28,6 @@ pub struct ClocksData {
     pub max: i32,
     pub custom_title: Option<String>,
     pub is_secondary: bool,
-    pub show_separator: bool,
 }
 
 impl ClocksData {
@@ -41,44 +38,8 @@ impl ClocksData {
             max,
             is_secondary: false,
             custom_title: None,
-            show_separator: false,
         }
     }
-}
-
-fn make_event_controller_no_scroll() -> gtk::EventControllerScroll {
-    let controller = gtk::EventControllerScroll::new(
-        gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::HORIZONTAL,
-    );
-    controller.connect_scroll(|controller, dx, dy| {
-        if let Some(parent) = controller
-            .widget()
-            .and_then(|widget| widget.ancestor(gtk::ScrolledWindow::static_type()))
-        {
-            let scrolled_window = parent.downcast::<gtk::ScrolledWindow>().unwrap();
-
-            if dy != 0.0 {
-                let current = scrolled_window.vadjustment().value();
-                let step = scrolled_window.vadjustment().step_increment();
-
-                // This is a bit of a hack, fractional values are generally touchpad inputs (in pixels),
-                // while whole values are scroll wheel events (which should use the `step` value)
-                // With newer GTK this should be changed to getting `unit()` from the scroll controller
-                let delta = if dy.fract() == 0.0 { dy * step } else { dy };
-                scrolled_window.vadjustment().set_value(current + delta);
-            }
-
-            if dx != 0.0 {
-                let current = scrolled_window.hadjustment().value();
-                let step = scrolled_window.hadjustment().step_increment();
-                let delta = if dx.fract() == 0.0 { dy * step } else { dy };
-                scrolled_window.hadjustment().set_value(current + delta);
-            }
-        }
-
-        gtk::glib::Propagation::Stop
-    });
-    controller
 }
 
 #[derive(Debug)]
@@ -105,14 +66,9 @@ impl FactoryComponent for ClockAdjustmentRow {
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
 
-            gtk::Separator {
-                set_visible: self.show_separator,
-                set_margin_top: 5,
-                set_margin_bottom: 10,
-            },
-
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
+
                 #[name = "title_label"]
                 gtk::Label {
                     set_xalign: 0.0,
@@ -147,7 +103,7 @@ impl FactoryComponent for ClockAdjustmentRow {
                     set_digits: 0,
                     set_round_digits: 0,
                     set_value_pos: gtk::PositionType::Right,
-                    set_margin_horizontal: 5,
+                    set_width_request: 100,
                     add_controller = make_event_controller_no_scroll(),
                 },
 
@@ -155,6 +111,9 @@ impl FactoryComponent for ClockAdjustmentRow {
                 gtk::SpinButton {
                     set_adjustment: &self.adjustment,
                     add_controller = make_event_controller_no_scroll(),
+                    connect_changed => move |_| {
+                        APP_BROKER.send(AppMsg::SettingsChanged);
+                    } @ text_change_signal,
                 },
             },
         }
@@ -184,7 +143,6 @@ impl FactoryComponent for ClockAdjustmentRow {
             change_signal,
             value_ratio: 1.0,
             is_secondary: data.is_secondary,
-            show_separator: data.show_separator,
         }
     }
 
@@ -197,6 +155,9 @@ impl FactoryComponent for ClockAdjustmentRow {
         match msg {
             ClockAdjustmentRowMsg::ValueRatio(ratio) => {
                 self.adjustment.block_signal(&self.change_signal);
+                widgets
+                    .input_button
+                    .block_signal(&widgets.text_change_signal);
 
                 let raw_current = self.adjustment.value() / self.value_ratio;
                 let raw_min = self.adjustment.lower() / self.value_ratio;
@@ -208,6 +169,9 @@ impl FactoryComponent for ClockAdjustmentRow {
 
                 self.value_ratio = ratio;
 
+                widgets
+                    .input_button
+                    .unblock_signal(&widgets.text_change_signal);
                 self.adjustment.unblock_signal(&self.change_signal);
             }
             ClockAdjustmentRowMsg::AddSizeGroup {

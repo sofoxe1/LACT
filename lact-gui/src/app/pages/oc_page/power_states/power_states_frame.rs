@@ -1,11 +1,10 @@
 use super::power_states_list::PowerStatesList;
+use super::power_states_list::{PowerStatesListMsg, PowerStatesListOptions};
 use crate::{
     APP_BROKER, I18N,
     app::{
-        msg::AppMsg,
-        pages::oc_page::power_states::power_states_list::{
-            PowerStatesListMsg, PowerStatesListOptions,
-        },
+        components::page_section_expander::PageSectionExpander, msg::AppMsg,
+        utils::ext::RelmLaunchable as _,
     },
 };
 use amdgpu_sysfs::gpu_handle::{PerformanceLevel, PowerLevelKind};
@@ -17,8 +16,9 @@ use i18n_embed_fl::fl;
 use indexmap::IndexMap;
 use lact_schema::{DeviceStats, PowerStates};
 use relm4::{
-    Component, ComponentController, ComponentParts, ComponentSender, RelmObjectExt, RelmWidgetExt,
-    binding::BoolBinding,
+    ComponentController, ComponentParts, ComponentSender, RelmObjectExt,
+    binding::{Binding, BoolBinding},
+    css,
 };
 use std::sync::Arc;
 
@@ -27,7 +27,6 @@ pub struct PowerStatesFrame {
     vram_states_list: relm4::Controller<PowerStatesList>,
     states_configurable: BoolBinding,
     states_configured: BoolBinding,
-    states_expanded: BoolBinding,
     performance_level: Option<PerformanceLevel>,
     configured_signal: SignalHandlerId,
     vram_clock_ratio: f64,
@@ -43,6 +42,7 @@ pub enum PowerStatesFrameMsg {
     PerformanceLevel(Option<PerformanceLevel>),
     VramClockRatio(f64),
     Configurable(bool),
+    InternalConfigurableChanged(bool),
 }
 
 #[relm4::component(pub)]
@@ -52,20 +52,14 @@ impl relm4::SimpleComponent for PowerStatesFrame {
     type Output = ();
 
     view! {
-        gtk::Expander {
-            set_label: Some(&fl!(I18N, "pstates")),
-            add_binding: (&model.states_expanded, "expanded"),
-            set_margin_horizontal: 20,
-
-            gtk::Box {
+        PageSectionExpander::new(&fl!(I18N, "pstates")) {
+            append_expandable = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                set_margin_all: 10,
                 set_spacing: 5,
-                add_binding: (&model.states_configurable, "sensitive"),
 
                 gtk::Label {
                     set_label: &fl!(I18N, "pstates-manual-needed"),
-                    set_margin_horizontal: 10,
+                    add_css_class: css::DIM_LABEL,
                     set_halign: gtk::Align::Start,
                     #[watch]
                     set_visible: model.performance_level.is_some_and(|level| level != PerformanceLevel::Manual),
@@ -76,15 +70,25 @@ impl relm4::SimpleComponent for PowerStatesFrame {
                     add_binding: (&model.states_configured, "active"),
                     #[watch]
                     set_visible: model.performance_level.is_some(),
+                    #[watch]
+                    set_sensitive: model.performance_level.is_some_and(|level| level == PerformanceLevel::Manual),
                 },
 
                 gtk::Box {
                     set_spacing: 10,
                     set_orientation: gtk::Orientation::Horizontal,
-                    add_binding: (&model.states_configured, "sensitive"),
 
-                    append = model.core_states_list.widget(),
-                    append = model.vram_states_list.widget(),
+                    gtk::Box {
+                        #[watch]
+                        set_visible: !model.core_states_list.model().is_empty(),
+                        append = model.core_states_list.widget(),
+                    },
+
+                    gtk::Box {
+                        #[watch]
+                        set_visible: !model.vram_states_list.model().is_empty(),
+                        append = model.vram_states_list.widget(),
+                    },
                 }
             }
         }
@@ -93,24 +97,23 @@ impl relm4::SimpleComponent for PowerStatesFrame {
     fn init(
         _: Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let core_states_list = PowerStatesList::builder()
-            .launch(PowerStatesListOptions {
-                title: fl!(I18N, "gpu-pstates"),
-                value_suffix: fl!(I18N, "mhz"),
-            })
-            .detach();
-        let vram_states_list = PowerStatesList::builder()
-            .launch(PowerStatesListOptions {
-                title: fl!(I18N, "vram-pstates"),
-                value_suffix: fl!(I18N, "mhz"),
-            })
-            .detach();
+        let core_states_list = PowerStatesList::detach(PowerStatesListOptions {
+            title: fl!(I18N, "gpu-pstates"),
+            value_suffix: fl!(I18N, "mhz"),
+        });
+        let vram_states_list = PowerStatesList::detach(PowerStatesListOptions {
+            title: fl!(I18N, "vram-pstates"),
+            value_suffix: fl!(I18N, "mhz"),
+        });
 
         let states_configured = BoolBinding::new(false);
 
-        let configured_signal = states_configured.connect_value_notify(|_| {
+        let configured_signal = states_configured.connect_value_notify(move |states_configured| {
+            sender.input(PowerStatesFrameMsg::InternalConfigurableChanged(
+                states_configured.get(),
+            ));
             APP_BROKER.send(AppMsg::SettingsChanged);
         });
 
@@ -120,7 +123,6 @@ impl relm4::SimpleComponent for PowerStatesFrame {
             states_configurable: BoolBinding::new(false),
             states_configured,
             configured_signal,
-            states_expanded: BoolBinding::new(false),
             performance_level: None,
             vram_clock_ratio: 1.0,
         };
@@ -149,10 +151,12 @@ impl relm4::SimpleComponent for PowerStatesFrame {
                 ));
             }
             PowerStatesFrameMsg::Stats(stats) => {
-                self.core_states_list
-                    .emit(PowerStatesListMsg::ActiveState(stats.core_power_state));
-                self.vram_states_list
-                    .emit(PowerStatesListMsg::ActiveState(stats.memory_power_state));
+                self.core_states_list.emit(PowerStatesListMsg::ActiveState(
+                    stats.active_power_states.and_then(|states| states.core),
+                ));
+                self.vram_states_list.emit(PowerStatesListMsg::ActiveState(
+                    stats.active_power_states.and_then(|states| states.memory),
+                ));
             }
             PowerStatesFrameMsg::VramClockRatio(ratio) => {
                 self.vram_clock_ratio = ratio;
@@ -163,6 +167,11 @@ impl relm4::SimpleComponent for PowerStatesFrame {
                         || !self.vram_states_list.model().is_empty());
                 self.states_configurable.set_value(value);
 
+                self.core_states_list
+                    .emit(PowerStatesListMsg::Configurable(value));
+                self.vram_states_list
+                    .emit(PowerStatesListMsg::Configurable(value));
+
                 if !value {
                     self.states_configured.block_signal(&self.configured_signal);
                     self.states_configured.set_value(false);
@@ -172,6 +181,12 @@ impl relm4::SimpleComponent for PowerStatesFrame {
             }
             PowerStatesFrameMsg::PerformanceLevel(level) => {
                 self.performance_level = level;
+            }
+            PowerStatesFrameMsg::InternalConfigurableChanged(configurable) => {
+                self.core_states_list
+                    .emit(PowerStatesListMsg::Configurable(configurable));
+                self.vram_states_list
+                    .emit(PowerStatesListMsg::Configurable(configurable));
             }
         }
     }

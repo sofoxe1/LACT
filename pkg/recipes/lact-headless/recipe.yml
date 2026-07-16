@@ -3,23 +3,23 @@ metadata:
   description: GPU control utility
   arch: x86_64
   license: MIT
-  version: 0.8.5
+  version: 0.9.1
   maintainer: ilya-zlobintsev
   url: https://github.com/ilya-zlobintsev/lact
   source:
     - '../../../../LACT'
   provides: [ lact ]
-  conflicts: [ lact, lact-libadwaita ]
+  conflicts: [ lact ]
   depends:
     all: [ hwdata, vulkan-tools, clinfo ]
-    debian-12+ubuntu-2204+ubuntu-2404: [ libdrm-amdgpu1, libdrm2 ]
-    fedora-42+fedora-43+rhel-8+rhel-9: [ libdrm ]
+    debian-13+ubuntu-2404+ubuntu-2604: [ libdrm-amdgpu1, libdrm2 ]
+    fedora-43+fedora-44+rhel-8+rhel-9: [ libdrm ]
     arch: [ libdrm, ocl-icd ]
     opensuse-tumbleweed: [ libdrm ]
   build_depends:
     all: [ curl, make, clang, git, vulkan-tools, clinfo ]
-    debian-12+ubuntu-2204+ubuntu-2404: [ pkg-config, build-essential, libdrm-dev, dbus ]
-    fedora-42+fedora-43: [ gcc, libdrm-devel, dbus ]
+    debian-13+ubuntu-240+ubuntu-26044: [ pkg-config, build-essential, libdrm-dev, dbus ]
+    fedora-43+fedora-44: [ gcc, libdrm-devel, dbus ]
     rhel-8+rhel-9: [ gcc, libdrm-devel, dbus ]
     arch: [ libdrm, dbus ]
     opensuse-tumbleweed: [ libdrm-devel ]
@@ -30,7 +30,7 @@ configure:
   steps:
     - cmd: curl -o /tmp/install_rust.sh $RUSTUP_URL
     - cmd: sh /tmp/install_rust.sh -y
-    - cmd: bash -c "source $HOME/.cargo/env && rustup toolchain install 1.93.0"
+    - cmd: bash -c "source $HOME/.cargo/env && rustup toolchain install 1.97.0"
     - cmd: pacman -Syu --noconfirm
       pkg: true
 build:
@@ -39,4 +39,3 @@ build:
 install:
   steps:
     - cmd: bash -c "cd $PKGER_BLD_DIR/LACT && DESTDIR=$PKGER_OUT_DIR PREFIX=/usr make install"
-

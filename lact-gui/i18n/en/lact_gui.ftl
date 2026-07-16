@@ -1,7 +1,8 @@
-info-page = Information 
-oc-page = OC 
-thermals-page = Thermals 
-software-page = Software 
+info-page = Hardware Info
+oc-page = Overclocking
+thermals-page = Thermals
+software-page = Software Info
+displays-page = Display Info
 
 hardware-info = Hardware Information
 
@@ -27,6 +28,8 @@ extensions = Extensions
 show-button = Show
 device-not-found = {$kind} device not found
 cache-info = Cache Information
+hw-ip-info = Hardware IP Information
+hw-queues = Queues
 amd-cache-desc = {$size} L{$level} {$types} cache { $shared ->
     [1] local to each CU
     *[other] shared between {$shared} CUs
@@ -37,6 +40,7 @@ cache-instruction = Data
 cache-cpu = CPU
 
 monitoring-section = Monitoring
+thresholds-section = Thresholds &amp; Limits
 fan-control-section = Fan Control
 temperatures = Temperatures
 oc-missing-fan-control-warning = Warning: Overclocking support is disabled, fan control functionality is not available.
@@ -67,9 +71,7 @@ automatic-mode-threshold-tooltip = Switch fan control to auto mode when the temp
     This option allows to work around this limitation by only using the custom curve when above a specific temperature, with the card's builtin auto mode that supports zero RPM being used below it.
 
 amd-oc = AMD Overclocking
-amd-oc-disabled = 
-    AMD Overclocking support is not enabled!
-    You can still change basic settings, but the more advanced clocks and voltage control will not be available.
+amd-oc-disabled = AMD Overclocking is not enabled! <a href="https://github.com/ilya-zlobintsev/LACT/wiki/Overclocking-(AMD)">Some functionality will not be available.</a>
 amd-oc-status = AMD Overclocking is currently: <b>{$status ->
     [true] Enabled
     [false] Disabled
@@ -79,10 +81,10 @@ amd-oc-detected-system-config = Detected system configuration: <b>{$config ->
     [unsupported] Unsupported
     *[other] {$config}
 }</b>
-amd-oc-description = 
+amd-oc-description =
     {$config ->
         [rpm-ostree] This option will toggle AMD overdrive support by setting boot flags through <b>rpm-ostree</b>.
-        [unsupported] 
+        [unsupported]
             The current system is not recognized as supported for automatic overdrive configuration.
             You may attempt to enable overclocking from LACT, but a manual initramfs regeneration may be required for it to take effect.
             If that fails, a fallback option is to add <b>amdgpu.ppfeaturemask=0xffffffff</b> as a boot parameter in your bootloader.
@@ -101,7 +103,10 @@ reset-config = Reset Configuration
 reset-config-description = Are you sure you want to reset all GPU configuration?
 
 apply-button = Apply
+confirm = Confirm
+confirm-settings = Confirm Settings
 revert-button = Revert
+settings-confirmation = Do you want to keep the new settings? (Reverting in {$seconds_left} seconds)
 
 power-cap = Power Usage Limit
 
@@ -126,6 +131,7 @@ no-throttling = No
 unknown-throttling = Unknown
 missing-stat = N/A
 vram-usage = VRAM Usage:
+gtt-usage = GTT Usage:
 
 performance-level-auto = Automatic
 performance-level-high = Highest Clocks
@@ -139,36 +145,56 @@ performance-level-manual-description = Manual performance control.
 performance-level = Performance Level
 power-profile-mode = Power Profile Mode:
 manual-level-needed = Performance level has to be set to "manual" to use power states and modes
+power-mizer-mode = PowerMizer Mode
+power-mizer-mode-auto = Auto
+power-mizer-mode-adaptive = Adaptive
+power-mizer-mode-prefer-maximum-performance = Prefer Maximum Performance
+power-mizer-mode-prefer-consistent-performance = Prefer Consistent Performance
+power-mizer-mode-auto-description = Let the driver choose the performance policy.
+power-mizer-mode-adaptive-description = Adjust GPU clocks based on GPU usage.
+power-mizer-mode-prefer-maximum-performance-description = Favor maximum performance within driver limits.
+power-mizer-mode-prefer-consistent-performance-description = Lock to GPU base clocks.
 
 overclock-section = Clockspeed and Voltage
-nvidia-oc-info = Nvidia Overclocking Information
-nvidia-oc-description = 
+nvidia-oc-info = Overclocking Information
+nvidia-oc-description =
     Overclocking functionality on Nvidia includes setting offsets for GPU/VRAM clockspeeds and limiting the potential range of clockspeeds using the "locked clocks" feature.
 
     On many cards, the VRAM clockpeed offset will only affect the actual memory clockspeed by half of the offset value.
     For example, a +1000MHz VRAM offset may only increase the measured VRAM speed by 500MHz.
     This is normal, and is how Nvidia handles GDDR data rates. Adjust your overclock accordingly.
 
-    Direct voltage control is not supported, as it does not exist in the Nvidia Linux driver.
-
     It is possible to achieve a pseudo-undervolt by combining the locked clocks option with a positive clockspeed offset.
     This will force the GPU to run at a voltage that's constrained by the locked clocks, while achieving a higher clockspeed due to the offset.
     This can cause system instability if pushed too high.
-oc-warning = Warning: changing these values may lead to system instability and can potentially damage your hardware!
+oc-warning = Changing these values may lead to system instability and can potentially damage your hardware!
 show-all-pstates = Show all P-States
 enable-gpu-locked-clocks = Enable GPU Locked Clocks
 enable-vram-locked-clocks = Enable VRAM Locked Clocks
 pstate-list-description = <b>The following values are clock offsets for each P-State, going from highest to lowest.</b>
 no-clocks-data = No clocks data available
 reset-oc-tooltip = Warning: this resets all clock settings to defaults!
+vf-curve-editor = VF Curve Editor
+nvidia-vf-curve-warning = The voltage-frequency curve editor relies on undocumented driver functionality.
+    There are no guarantees regarding its behaviour, safety or availability.
+    <span weight = "heavy" underline = "single">Use at your own risk</span>.
+vf-curve-enable-editing = Enable Editing
+voltage = Voltage
+frequency = Frequency
+vf-active-curve = Active Curve
+vf-base-curve = Base Curve
+vf-curve-visible-range = Visible Range (%):
+vf-curve-visible-range-to = to
+vf-curve-flatten-right = Flatten curve to the right
+vf-curve-flatten-selection = Flatten selection
 
 gpu-clock-offset = GPU Clock Offset (MHz)
 max-gpu-clock = Maximum GPU Clock (MHz)
-max-vram-clock = Maximum VRAM Clock (MHz) 
-max-gpu-voltage = Maximum GPU Voltage (mV) 
+max-vram-clock = Maximum VRAM Clock (MHz)
+max-gpu-voltage = Maximum GPU Voltage (mV)
 min-gpu-clock = Minimum GPU Clock (MHz)
-min-vram-clock = Minimum VRAM Clock (MHz) 
-min-gpu-voltage = Minimum GPU Voltage (mV) 
+min-vram-clock = Minimum VRAM Clock (MHz)
+min-gpu-voltage = Minimum GPU Voltage (mV)
 gpu-voltage-offset = GPU voltage offset (mV)
 gpu-pstate-clock-offset = GPU P-State {$pstate} Clock Offset (MHz)
 vram-pstate-clock-offset = VRAM P-State {$pstate} Clock Offset (MHz)
@@ -180,10 +206,11 @@ mem-pstate-clock-voltage = VRAM P-State {$pstate} Voltage (mV)
 pstates = Power States
 gpu-pstates = GPU Power States
 vram-pstates = VRAM Power States
-pstates-manual-needed = Note: performance level must be set to 'manual' to toggle power states
+pstates-manual-needed = Performance level must be set to 'manual' to toggle power states
 enable-pstate-config = Enable power state configuration
 
-show-historical-charts = Show Historical Charts
+menu = Menu
+show-historical-charts = Show Graphs
 show-process-monitor = Show Process Monitor
 generate-debug-snapshot = Generate Debug Snapshot
 dump-vbios = Dump VBIOS
@@ -200,10 +227,32 @@ edit-graphs = Edit
 export-csv = Export as CSV
 edit-graph-sensors = Edit Graph Sensors
 
+error-heading = Error
+daemon-info-heading = Daemon info
+
 reconnecting-to-daemon = Daemon connection lost, reconnecting...
 daemon-connection-lost = Connection Lost
+embedded-daemon-info =
+    Could not connect to daemon, running in embedded mode.
+    Please make sure the lactd service is running.
+    Using embedded mode, you will not be able to change any settings.
+
+    {$error_info}To enable the daemon, run the following command, then restart LACT:
+version-mismatch = Version mismatch
+version-mismatch-description =
+    Version mismatch between GUI and Daemon ({$gui_version}-{$gui_commit} vs {$daemon_version}-{$daemon_commit})!
+    If you have updated LACT, you need to restart the service with:
 
 plot-show-detailed-info = Show detailed info
+
+display-title = Display {$identifier}
+display-manufacturer = Manufacturer
+display-product-code = Product Code
+display-model = Model
+display-physical-size = Physical Size
+display-connection = Connection
+display-manufacture-date = Manufacture Date
+displays-missing = No Displays Detected
 
 settings-profile = Settings Profile
 auto-switch-profiles = Switch automatically
@@ -215,6 +264,7 @@ name = Name
 profile-copy-from = Copy settings from:
 create = Create
 cancel = Cancel
+close = Close
 save = Save
 default-profile = Default
 rename-profile = Rename Profile
@@ -247,6 +297,18 @@ profile-rule-gamemode-tab = Gamemode is active
 profile-rule-process-name = Process Name:
 profile-rule-args-contain = Arguments Contain:
 profile-rule-specific-process = With a specific process:
+
+theme = Theme
+theme-auto = Automatic
+preferences = Preferences
+ui = UI
+daemon = Daemon
+about = About
+
+color-scheme = Color Scheme
+color-scheme-auto = System
+color-scheme-light = Light
+color-scheme-dark = Dark
 
 # Crash page
 crash-page-title = Application Crashed

@@ -1,10 +1,11 @@
 use amdgpu_sysfs::gpu_handle::{PerformanceLevel, PowerLevelKind};
 use indexmap::IndexMap;
+use nvml_wrapper::enums::device::PowerMizerMode;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use crate::{
-    FanControlMode, FanCurveMap, PmfwOptions, ProfileRule, default_fan_curve,
+    FanControlMode, FanCurveMap, NvidiaThermalOptions, PmfwOptions, ProfileRule, default_fan_curve,
     request::{ClockspeedType, SetClocksCommand},
 };
 
@@ -39,6 +40,9 @@ pub struct GpuConfig {
     pub fan_control_settings: Option<FanControlSettings>,
     #[serde(default, skip_serializing_if = "PmfwOptions::is_empty")]
     pub pmfw_options: PmfwOptions,
+    #[serde(default, skip_serializing_if = "NvidiaThermalOptions::is_empty")]
+    pub nvidia_thermal_options: NvidiaThermalOptions,
+    pub power_mizer_mode: Option<PowerMizerMode>,
     pub power_cap: Option<f64>,
     pub performance_level: Option<PerformanceLevel>,
     #[serde(default, flatten)]
@@ -87,6 +91,52 @@ pub struct ClocksConfiguration {
     pub voltage_offset: Option<i32>,
 }
 
+impl ClocksConfiguration {
+    pub fn apply_clocks_command(&mut self, command: &SetClocksCommand) {
+        let value = command.value;
+        match command.r#type {
+            ClockspeedType::MaxCoreClock => self.max_core_clock = value,
+            ClockspeedType::MaxMemoryClock => self.max_memory_clock = value,
+            ClockspeedType::MaxVoltage => self.max_voltage = value,
+            ClockspeedType::MinCoreClock => self.min_core_clock = value,
+            ClockspeedType::MinMemoryClock => self.min_memory_clock = value,
+            ClockspeedType::MinVoltage => self.min_voltage = value,
+            ClockspeedType::VoltageOffset => self.voltage_offset = value,
+            ClockspeedType::GpuClockOffset(pstate) => match value {
+                Some(value) => {
+                    self.gpu_clock_offsets.insert(pstate, value);
+                }
+                None => {
+                    self.gpu_clock_offsets.shift_remove(&pstate);
+                }
+            },
+            ClockspeedType::MemClockOffset(pstate) => match value {
+                Some(value) => {
+                    self.mem_clock_offsets.insert(pstate, value);
+                }
+                None => {
+                    self.mem_clock_offsets.shift_remove(&pstate);
+                }
+            },
+            ClockspeedType::GpuVfCurveClock(point) => {
+                self.gpu_vf_curve.entry(point).or_default().clockspeed = value;
+            }
+            ClockspeedType::GpuVfCurveVoltage(point) => {
+                self.gpu_vf_curve.entry(point).or_default().voltage = value;
+            }
+            ClockspeedType::MemVfCurveClock(point) => {
+                self.mem_vf_curve.entry(point).or_default().clockspeed = value;
+            }
+            ClockspeedType::MemVfCurveVoltage(point) => {
+                self.mem_vf_curve.entry(point).or_default().voltage = value;
+            }
+            ClockspeedType::Reset => {
+                *self = ClocksConfiguration::default();
+            }
+        }
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct CurvePoint {
@@ -128,52 +178,6 @@ mod int_map {
 impl GpuConfig {
     pub fn is_core_clocks_used(&self) -> bool {
         self.clocks_configuration != ClocksConfiguration::default()
-    }
-
-    pub fn apply_clocks_command(&mut self, command: &SetClocksCommand) {
-        let clocks = &mut self.clocks_configuration;
-        let value = command.value;
-        match command.r#type {
-            ClockspeedType::MaxCoreClock => clocks.max_core_clock = value,
-            ClockspeedType::MaxMemoryClock => clocks.max_memory_clock = value,
-            ClockspeedType::MaxVoltage => clocks.max_voltage = value,
-            ClockspeedType::MinCoreClock => clocks.min_core_clock = value,
-            ClockspeedType::MinMemoryClock => clocks.min_memory_clock = value,
-            ClockspeedType::MinVoltage => clocks.min_voltage = value,
-            ClockspeedType::VoltageOffset => clocks.voltage_offset = value,
-            ClockspeedType::GpuClockOffset(pstate) => match value {
-                Some(value) => {
-                    clocks.gpu_clock_offsets.insert(pstate, value);
-                }
-                None => {
-                    clocks.gpu_clock_offsets.shift_remove(&pstate);
-                }
-            },
-            ClockspeedType::MemClockOffset(pstate) => match value {
-                Some(value) => {
-                    clocks.mem_clock_offsets.insert(pstate, value);
-                }
-                None => {
-                    clocks.mem_clock_offsets.shift_remove(&pstate);
-                }
-            },
-            ClockspeedType::GpuVfCurveClock(point) => {
-                clocks.gpu_vf_curve.entry(point).or_default().clockspeed = value;
-            }
-            ClockspeedType::GpuVfCurveVoltage(point) => {
-                clocks.gpu_vf_curve.entry(point).or_default().voltage = value;
-            }
-            ClockspeedType::MemVfCurveClock(point) => {
-                clocks.mem_vf_curve.entry(point).or_default().clockspeed = value;
-            }
-            ClockspeedType::MemVfCurveVoltage(point) => {
-                clocks.mem_vf_curve.entry(point).or_default().voltage = value;
-            }
-            ClockspeedType::Reset => {
-                *clocks = ClocksConfiguration::default();
-                assert!(!self.is_core_clocks_used());
-            }
-        }
     }
 }
 

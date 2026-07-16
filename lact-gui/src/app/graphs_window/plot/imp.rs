@@ -101,12 +101,15 @@ mod benches {
         },
         stat::{StatType, StatsData},
     };
-    use amdgpu_sysfs::{gpu_handle::PerformanceLevel, hw_mon::Temperature};
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use amdgpu_sysfs::{
+        gpu_handle::{PerformanceLevel, PowerLevelId},
+        hw_mon::Temperature,
+    };
     use divan::{Bencher, counter::ItemsCount};
+    use jiff::Timestamp;
     use lact_schema::{
-        ClockspeedStats, DeviceStats, FanStats, PmfwInfo, PowerStats, TemperatureEntry,
-        VoltageStats, VramStats,
+        ActivePowerStates, ClockspeedStats, DeviceStats, FanStats, PmfwInfo, PowerStats,
+        TemperatureEntry, VoltageStats, VramStats,
     };
     use std::{
         collections::HashMap,
@@ -148,10 +151,7 @@ mod benches {
         // Simulate 1 minute plot with 4 values per second
         for sec in 0..60 {
             for milli in [0, 250, 500, 750] {
-                let datetime = NaiveDateTime::new(
-                    NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-                    NaiveTime::from_hms_milli_opt(0, 0, sec, milli).unwrap(),
-                );
+                let timestamp = Timestamp::from_millisecond(sec * 1000 + milli).unwrap();
 
                 let stats = DeviceStats {
                     busy_percent: Some(3),
@@ -161,7 +161,11 @@ mod benches {
                         target_gpu_clockspeed: None,
                         sensors: HashMap::new(),
                     },
-                    core_power_state: Some(0),
+                    active_power_states: Some(ActivePowerStates {
+                        core: Some(PowerLevelId::Index(0)),
+                        memory: Some(PowerLevelId::Index(3)),
+                        pcie: Some(PowerLevelId::Index(1)),
+                    }),
                     fan: FanStats {
                         control_enabled: false,
                         pmfw_info: PmfwInfo::default(),
@@ -173,8 +177,9 @@ mod benches {
                         speed_min: Some(0),
                         ..Default::default()
                     },
-                    memory_power_state: Some(3),
-                    pcie_power_state: Some(1),
+                    nvidia_thermal_info: Default::default(),
+                    active_power_mizer_mode: None,
+                    supported_power_mizer_modes: None,
                     performance_level: Some(PerformanceLevel::Auto),
                     power: PowerStats {
                         average: Some(36.0),
@@ -193,6 +198,7 @@ mod benches {
                                 crit_hyst: None,
                                 current: Some(56.0),
                             },
+                            primary: true,
                             display_only: false,
                         },
                     )]),
@@ -200,11 +206,13 @@ mod benches {
                     vram: VramStats {
                         total: Some(17163091968),
                         used: Some(668274688),
+                        gtt_total_usable: None,
+                        gtt_used: None,
                     },
                     throttle_info: None,
                 };
 
-                data.update_with_timestamp(&stats, 1.0, datetime.and_utc().timestamp_millis());
+                data.update_with_timestamp(&stats, 1.0, timestamp.as_millisecond());
             }
         }
 

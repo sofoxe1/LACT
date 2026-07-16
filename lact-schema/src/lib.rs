@@ -15,13 +15,15 @@ pub use response::Response;
 
 use amdgpu_sysfs::{
     gpu_handle::{
-        PerformanceLevel,
+        PerformanceLevel, PowerLevelId,
         fan_control::FanInfo,
         overdrive::{ClocksTable as _, ClocksTableGen as AmdClocksTableGen},
     },
     hw_mon::Temperature,
 };
 use indexmap::{IndexMap, IndexSet};
+use nvml_wrapper::enums::device::PowerMizerMode;
+
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{
@@ -133,10 +135,8 @@ pub enum DeviceFlag {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeviceInfo {
     pub pci_info: Option<GpuPciInfo>,
-    #[serde(default)]
-    pub vulkan_instances: Vec<VulkanInfo>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub opencl_instances: Vec<OpenCLInfo>,
+    #[serde(flatten)]
+    pub api_info: DeviceApiInfo,
     pub driver: String,
     pub vbios_version: Option<String>,
     pub link_info: LinkInfo,
@@ -330,6 +330,14 @@ impl DeviceInfo {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DeviceApiInfo {
+    #[serde(default)]
+    pub vulkan_instances: Vec<VulkanInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub opencl_instances: Vec<OpenCLInfo>,
+}
+
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DrmInfo {
@@ -351,8 +359,19 @@ pub struct DrmInfo {
     pub cache_info: Option<CacheInfo>,
     pub rop_info: Option<RopInfo>,
     pub memory_info: Option<DrmMemoryInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub amd_ip_info: Vec<AmdIpInfo>,
     #[serde(flatten)]
     pub intel: IntelDrmInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AmdIpInfo {
+    pub ip_type: String,
+    pub version_major: u32,
+    pub version_minor: u32,
+    pub queues: u32,
+    pub count: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -430,6 +449,17 @@ pub struct NvidiaClocksTable {
     pub gpu_clock_range: Option<(u32, u32)>,
     #[serde(default)]
     pub vram_clock_range: Option<(u32, u32)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gpu_vf_curve: Vec<NvidiaVfPoint>,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy)]
+pub struct NvidiaVfPoint {
+    pub index: u8,
+    pub freq: u32,
+    pub voltage: u32,
+    pub base_freq: u32,
+    pub base_voltage: u32,
 }
 
 /// Doc from `xe_gt_freq.c`
@@ -520,6 +550,8 @@ pub struct PciInfo {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DeviceStats {
     pub fan: FanStats,
+    #[serde(default, skip_serializing_if = "NvidiaThermalInfo::is_empty")]
+    pub nvidia_thermal_info: NvidiaThermalInfo,
     pub clockspeed: ClockspeedStats,
     pub voltage: VoltageStats,
     pub vram: VramStats,
@@ -527,19 +559,34 @@ pub struct DeviceStats {
     pub temps: HashMap<String, TemperatureEntry>,
     pub busy_percent: Option<u8>,
     pub performance_level: Option<PerformanceLevel>,
-    pub core_power_state: Option<usize>,
-    pub memory_power_state: Option<usize>,
-    pub pcie_power_state: Option<usize>,
+    pub active_power_mizer_mode: Option<PowerMizerMode>,
+    pub supported_power_mizer_modes: Option<Vec<PowerMizerMode>>,
+    pub active_power_states: Option<ActivePowerStates>,
     pub throttle_info: Option<BTreeMap<String, Vec<String>>>,
+}
+
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+pub struct ActivePowerStates {
+    pub core: Option<PowerLevelId>,
+    pub memory: Option<PowerLevelId>,
+    pub pcie: Option<PowerLevelId>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TemperatureEntry {
     #[serde(flatten)]
     pub value: Temperature,
+    /// Classify "important" temperature values (for display purposes)
+    #[serde(default = "default_temp_primary")]
+    pub primary: bool,
     /// If the temperature can be used for fan control
     #[serde(default)]
     pub display_only: bool,
+}
+
+fn default_temp_primary() -> bool {
+    true
 }
 
 #[skip_serializing_none]
@@ -566,6 +613,13 @@ pub struct FanStats {
     pub pmfw_info: PmfwInfo,
 }
 
+impl FanStats {
+    pub fn percent(&self) -> Option<u64> {
+        self.pwm_current
+            .map(|pwm| ((pwm as f64 / u8::MAX as f64) * 100.0).round() as u64)
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PmfwInfo {
@@ -575,6 +629,19 @@ pub struct PmfwInfo {
     pub minimum_pwm: Option<FanInfo>,
     pub zero_rpm_enable: Option<bool>,
     pub zero_rpm_temperature: Option<FanInfo>,
+}
+
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NvidiaThermalInfo {
+    pub target_temp: Option<FanInfo>,
+    pub target_temp_default: Option<u32>,
+}
+
+impl NvidiaThermalInfo {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[skip_serializing_none]
@@ -602,6 +669,8 @@ pub struct VoltageStats {
 pub struct VramStats {
     pub total: Option<u64>,
     pub used: Option<u64>,
+    pub gtt_total_usable: Option<u64>,
+    pub gtt_used: Option<u64>,
 }
 
 #[skip_serializing_none]
@@ -627,6 +696,28 @@ impl PowerStates {
     pub fn is_empty(&self) -> bool {
         self.core.is_empty() && self.vram.is_empty()
     }
+
+    pub fn max_gpu_clock(&self) -> Option<u64> {
+        self.core.iter().map(|s| s.value).max()
+    }
+
+    pub fn min_gpu_clock(&self) -> Option<u64> {
+        self.core
+            .iter()
+            .filter_map(|s| s.min_value.or(Some(s.value)))
+            .min()
+    }
+
+    pub fn max_vram_clock(&self) -> Option<u64> {
+        self.vram.iter().map(|s| s.value).max()
+    }
+
+    pub fn min_vram_clock(&self) -> Option<u64> {
+        self.vram
+            .iter()
+            .filter_map(|s| s.min_value.or(Some(s.value)))
+            .min()
+    }
 }
 
 #[skip_serializing_none]
@@ -635,7 +726,7 @@ pub struct PowerState {
     pub enabled: bool,
     pub min_value: Option<u64>,
     pub value: u64,
-    pub index: Option<u8>,
+    pub id: Option<PowerLevelId>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -669,6 +760,18 @@ pub struct PmfwOptions {
 }
 
 impl PmfwOptions {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NvidiaThermalOptions {
+    pub target_temperature: Option<u32>,
+}
+
+impl NvidiaThermalOptions {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
@@ -795,4 +898,41 @@ impl ProcessUtilizationType {
 pub enum ProcessType {
     Graphics,
     Compute,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DisplaysInfo {
+    pub displays: BTreeMap<String, DisplayInfo>,
+}
+
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DisplayInfo {
+    pub model: Option<String>,
+    pub manufacturer: Option<String>,
+    pub product_code: u16,
+    pub manufacture_date: Option<DisplayManufactureDate>,
+    pub size: Option<(u32, u32)>,
+    pub connector_type: DisplayConnector,
+    pub connector_id: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct DisplayManufactureDate {
+    pub year: u16,
+    pub week: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DisplayConnector {
+    DisplayPort {
+        lanes: Option<u16>,
+        /// Per-lane bandwidth in Mbps
+        bandwidth: Option<u32>,
+        embedded: bool,
+    },
+    Hdmi,
+    Dvi,
+    Vga,
+    Other,
 }

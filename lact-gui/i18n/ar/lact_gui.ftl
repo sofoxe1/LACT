@@ -18,9 +18,9 @@ api-version = إصدار API
 monitoring-section = المراقبة
 kernel-version = إصدار النواة
 oc-page = رفع تردد التشغيل
-software-page = البرمجية
+software-page = معلومات البرمجية
 hardware-info = معلومات العتاد
-lact-daemon = عفريت LACT
+lact-daemon = خدمة خلفية LACT
 lact-gui = واجهة المستخدم الرسومية LACT
 instance = نُسخة
 platform-name = اسم المنصة
@@ -40,7 +40,7 @@ temperatures = درجات الحرارة
 fan-speed = سرعة المروحة
 throttling = الاختناق
 curve-page = المنحنى
-info-page = المعلومات
+info-page = معلومات العتاد
 acoustic-target = الهدف الصوتي (دورة في الدقيقة)
 zero-rpm-stop-temp = درجة حرارة توقف المروحة عند صفر دورة في الدقيقة (°م)
 target-temp = درجة الحرارة المستهدفة (°م)
@@ -73,7 +73,7 @@ performance-level-low = أقل ترددات
 performance-level-low-description = استخدم دائمًا أقل سرعات تردد المعالج لبطاقة الرسوميات وذاكرة الفيديو.
 performance-level-manual-description = التحكم اليدوي في الأداء.
 overclock-section = سرعة التردد والجهد
-nvidia-oc-info = معلومات رفع تردد تشغيل Nvidia
+nvidia-oc-info = معلومات رفع تردد التشغيل
 show-all-pstates = عرض جميع حالات P
 enable-vram-locked-clocks = مكّن ترددات ذاكرة الفيديو المقفلة
 no-clocks-data = لا توجد بيانات توقيت متاحة
@@ -86,18 +86,16 @@ gpu-voltage-offset = إزاحة جهد معالج الرسوميات (mV)
 vram-pstate-clock-offset = إزاحة تردد ذاكرة الفيديو في حالة { $pstate } (ميجاهرتز)
 vram-pstates = حالات طاقة معالج الفيديو
 enable-pstate-config = مكّن تضبيط حالة الطاقة
-show-historical-charts = أظهر الرسوم البيانية التاريخية
+show-historical-charts = أظهر الرسوم البيانية
 settings-profile = إعدادات ملف التعريف
 auto-switch-profiles = بدّل تلقائيًا
 add-profile = أضف ملف تعريف جديد
 import-profile = استورد ملف التعريف من ملف
 reset-config-description = هل أنت متأكد أنك تريد تصفير كل إعدادات معالج الرسوميات؟
-amd-oc-disabled =
-    دعم رفع تردد تشغيل معالج AMD غير مُفعّل!
-    لا يزال بإمكانك تغيير الإعدادات الأساسية، ولكن لن تتوفر أدوات التحكم المتقدمة في الترددات والفولتية.
+amd-oc-disabled = رفع تردد تشغيل معالج AMD غير مُفعّل! <a href="https://github.com/ilya-zlobintsev/LACT/wiki/Overclocking-(AMD)">لن تتوفر بعض الوظائف.</a>
 pstates = حالات الطاقة
 enable-amd-oc-description = سيؤدي هذا إلى تمكين ميزة زيادة سرعة التشغيل (overdrive) لمُشغّل amdgpu عن طريق إنشاء ملف في <b>{ $path }</b> وتحديث initramfs. هل أنت متأكد أنك تريد القيام بذلك؟
-oc-warning = تحذير: قد يؤدي تغيير هذه القيم إلى عدم استقرار النظام وقد يتسبب في تلف جهازك!
+oc-warning = قد يؤدي تغيير هذه القيم إلى عدم استقرار النظام وقد يتسبب في تلف عتادك!
 max-gpu-voltage = الحد الأقصى لجهد معالج الرسوميات (mV)
 performance-level-auto-description = اضبط تلقائيًا ترددات معالج الرسوميات وذاكرة الفيديو. (افتراضي)
 performance-level-high-description = استخدم دائمًا أعلى سرعات تردد المعالج لبطاقة الرسوميات وذاكرة الفيديو.
@@ -109,14 +107,12 @@ nvidia-oc-description =
     على سبيل المثال، قد تؤدي إزاحة ذاكرة الفيديو بمقدار +1000 ميجاهرتز إلى زيادة سرعة ذاكرة الفيديو المقاسة بمقدار 500 ميجاهرتز فقط.
     هذا أمر طبيعي، وهي الطريقة التي تتعامل بها Nvidia مع معدلات بيانات GDDR. اضبط كسر السرعة الخاص بك وفقًا لذلك.
 
-    التحكم المباشر في الجهد غير مدعوم، لأنه غير موجود في مُشغّل Nvidia Linux.
-
     من الممكن تحقيق خفض جهد زائف من خلال الجمع بين خيار الساعات المقفلة وإزاحة سرعة تردد إيجابية.
     سيؤدي هذا إلى إجبار وحدة معالجة الرسوميات على العمل بجهد مقيد بالساعات المقفلة، مع تحقيق سرعة تردد أعلى بسبب الإزاحة.
     قد يتسبب هذا في عدم استقرار النظام إذا دُفع عاليًا جدًا.
 enable-gpu-locked-clocks = مكّن ترددات معالج الرسوميات المقفلة
 max-gpu-clock = الحد الأقصى لتردد معالج الرسوميات (ميجاهرتز)
-pstates-manual-needed = ملاحظة: يجب ضبط مستوى الأداء على "يدوي" لتبديل حالات الطاقة
+pstates-manual-needed = يجب ضبط مستوى الأداء على "يدوي" لتبديل حالات الطاقة
 min-gpu-voltage = الحد الأدنى لجهد معالج الرسوميات (mV)
 gpu-pstates = حالات طاقة معالج الرسوميات
 no-throttling = لا
@@ -167,7 +163,7 @@ activation-settings-status =
         [true] متطابقة
        *[false] غير متطابقة
     }</b>
-profile-hook-note = ملاحظة: يتم تنفيذ هذه الأوامر بصلاحيات الجذز بواسطة خفي LACT، وليس لديها وصول إلى بيئة سطح المكتب. وبالتالي، لا يمكن استخدامها مباشرةً لتشغيل التطبيقات الرسومية.
+profile-hook-note = ملاحظة: يتم تنفيذ هذه الأوامر بصلاحيات الجذز بواسطة خدمة خلفية LACT، وليس لديها وصول إلى بيئة سطح المكتب. وبالتالي، لا يمكن استخدامها مباشرةً لتشغيل التطبيقات الرسومية.
 profile-rule-gamemode-tab = وضع ال Gamemode نشط
 amd-oc-updating-configuration = جارٍ تحديث التضبيط (قد يستغرق هذا بعض الوقت)
 amd-oc-updating-done = حُدث التضبيط، يُرجى إعادة التشغيل لتطبيق التغييرات.
@@ -194,7 +190,7 @@ amd-oc-description =
     }
 
     انظر <a href="https://github.com/ilya-zlobintsev/LACT/wiki/Overclocking-(AMD)">الويكي</a> لمزيد من المعلومات.
-reconnecting-to-daemon = فُقد الاتصال بالعفريب، جارٍ إعادة الاتصال...
+reconnecting-to-daemon = فُقد الاتصال بخدمة الخلفية، جارٍ إعادة الاتصال...
 daemon-connection-lost = فُقد الاتصال
 plot-show-detailed-info = أظهر معلومات مفصلة
 generate-debug-snapshot = ولّد لقطة تصحيح
@@ -229,3 +225,54 @@ edit-graph-sensors = عدّل مستشعرات الرسم بياني
 gibibyte = ج.بايت
 crash-page-title = تطبيق تعطل
 exit = اخرج
+bytes = بايتات
+kibibyte = ك.بايت
+hw-ip-info = معلومات ملكية فكرية العتاد
+hw-queues = قوائم الانتظار
+theme = السمة
+theme-auto = تلقائي
+vf-curve-editor = محرّر منحنى VF
+nvidia-vf-curve-warning =
+    يعتمد محرّر منحنى الجهد والتردد على وظائف غير موثقة في المُشغّل.
+    لا توجد أي ضمانات فيما يتعلق بسلوكه أو سلامته أو توفره.
+    <span weight = "heavy" underline = "single">استخدمه على مسؤوليتك الخاصة</span>.
+vf-curve-enable-editing = فعّل التحرير
+voltage = الجهد
+frequency = التردد
+vf-active-curve = المنحنى النشط
+vf-base-curve = منحنى القاعدة
+vf-curve-visible-range = النطاق المرئي (%):
+vf-curve-visible-range-to = إلى
+vf-curve-flatten-right = تسطيح المنحنى جهة اليمين
+preferences = التفضيلات
+ui = الواجهة
+daemon = خدمة الخلفية
+about = عن
+confirm = أكِّد
+confirm-settings = أكِّد الإعدادات
+settings-confirmation = أتريد الاحتفاظ بالإعدادات الجديدة؟ (سيتم التراجع خلال { $seconds_left } ثانية)
+error-heading = خطأ
+daemon-info-heading = معلومات خدمة الخلفية
+embedded-daemon-info =
+    تعذر الاتصال بالخدمة الخلفية (daemon)، يتم التشغيل في الوضع المدمج.
+    يُرجى التأكد من أن خدمة lactd قيد التشغيل.
+    باستخدام الوضع المدمج، لن تتمكن من تغيير أي إعدادات.
+
+    { $error_info }لتفعيل الخدمة الخلفية، شغّل الأمر التالي، ثم أعد تشغيل LACT:
+version-mismatch = عدم تطابق الإصدار
+version-mismatch-description =
+    عدم تطابق في الإصدار بين واجهة المستخدم الرسومية والخدمة الخلفية (Daemon) ({ $gui_version }-{ $gui_commit } مقابل { $daemon_version }-{ $daemon_commit })!
+    إذا حدثت LACT، فأنت بحاجة إلى إعادة تشغيل الخدمة باستخدام:
+close = أغلِق
+menu = القائمة
+displays-page = معلومات العرض
+display-title = عرض { $identifier }
+display-manufacturer = الشركة المصنعة
+display-product-code = رمز المنتج
+display-model = النموذج
+display-physical-size = الحجم الملموس
+display-connection = الاتصال
+display-manufacture-date = تاريخ التصنيع
+thresholds-section = عتبة والحدود
+vf-curve-flatten-selection = تسوية التحديد
+displays-missing = لم يكتشف أي شاشات

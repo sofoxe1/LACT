@@ -1,4 +1,15 @@
 /* currently used for tests */
 .app {
+}
 
+.main-sidebar-container .sidebar {
+    border-right-width: 0;
+}
+
+.main-sidebar-container separator {
+    margin: 0 10px;
+}
+
+.main-sidebar-container .sidebar-section {
+    margin: 4px 8px 8px 8px;
 }
